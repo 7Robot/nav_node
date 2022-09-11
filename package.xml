@@ -21,7 +21,6 @@
   <!-- Example: -->
   <url type="website">https://www.bde.enseeiht.fr/clubs/robot/</url>
 
-
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
@@ -58,6 +57,9 @@
   <build_depend>cdf_msgs</build_depend>
   <build_export_depend>cdf_msgs</build_export_depend>
   <exec_depend>cdf_msgs</exec_depend>
+  <build_depend>obstacle_detector</build_depend>
+  <build_export_depend>obstacle_detector</build_export_depend>
+  <exec_depend>obstacle_detector</exec_depend>
   
 
 
