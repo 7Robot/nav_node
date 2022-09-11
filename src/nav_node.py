@@ -128,6 +128,28 @@ class NavigationNode():
             closest_node = self.find_closest_node(self, start_pos, graph, exclude=exclude.append(node))
         return closest_node
 
+    def get_line_equation(self, start_pos, end_pos):
+        """
+        Retourne l'équation de la droite passant par les deux points
+
+        Paramètres
+        ----------
+            - start_pos : tuple (x, y)\n
+                Position de départ du chemin
+            - end_pos : tuple (x, y)\n
+                Position d'arrivée du chemin
+        
+        Retourne
+        --------
+            - a : float\n
+                Coefficient directeur de la droite
+            - b : float\n
+                Ordonnée à l'origine de la droite
+        """
+        a = (end_pos[1] - start_pos[1]) / (end_pos[0] - start_pos[0])
+        b = start_pos[1] - a * start_pos[0]
+        return a, b
+
     def verify_obstacles(self, start_point, end_point, exclude=[]):
         """
         Vérifie si le segment reliant la position "start_point" à la position "end_point" traverse un obstacle
@@ -183,8 +205,7 @@ class NavigationNode():
         # Verifing collisions with dynamic obstacles
         elif exclude != 'dynamic':
             # Déterminons l'équation de la droite reliant le point de départ et d'arrivée
-            m = (end_point[1] - start_point[1]) / (end_point[0] - start_point[0])
-            o = start_point[1] - m * start_point[0]
+            o, m = self.get_line_equation(start_point, end_point)
 
             # On résoud maintenant l'équation pour trouver les points d'intersection entre cette droite et les cercles représentant les obstacles
             # L'équation à résoudre est la suivante : x^2 * (a^2 + 1) + x*(2*a*b - 2*xc - 2*a*yc) + b^2 + xc^2 + yc^2 - 2*yc*b - R^2 = 0
@@ -304,7 +325,19 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         if (Nav_node.robot_data.position.x, Nav_node.robot_data.position.y) != (Nav_node.next_point.x, Nav_node.next_point.y):
             start = time.time()
-            obstacle = Nav_node.verify_obstacles((Nav_node.robot_data.position.x, Nav_node.robot_data.position.y), (Nav_node.next_point.x, Nav_node.next_point.y), ['static'])
+
+            # On calcule l'équation de droite reliant la position du robot au prochain point
+            a, b = Nav_node.get_line_equation(Nav_node.robot_data.position, Nav_node.next_point)
+
+            if np.sqrt((Nav_node.robot_data.position.x - Nav_node.next_point.x)**2 + (Nav_node.robot_data.position.y - Nav_node.next_point.y)**2) > Nav_node.avoidance_trigger_distance:
+                # On trouve le point situé à une distance "avoidance_trigger_distance" du robot
+                x_avoid = np.sqrt(avoidance_trigger_distance**2 / (1 + a**2)) + Nav_node.robot_data.position.x
+                y_avoid = a * x_avoid + b
+            else:
+                x_avoid = Nav_node.next_point.x
+                y_avoid = Nav_node.next_point.y
+
+            obstacle = Nav_node.verify_obstacles((Nav_node.robot_data.position.x, Nav_node.robot_data.position.y), (x_avoid, y_avoid), ['static'])
             rospy.loginfo('Time to verify obstacles: ' + str(time.time() - start))
             if obstacle != None:
                 rospy.loginfo(obstacle)
