@@ -149,10 +149,11 @@ class NavigationNode():
         a = (end_pos[1] - start_pos[1]) / (end_pos[0] - start_pos[0])
         b = start_pos[1] - a * start_pos[0]
         return a, b
-
+    
     def verify_obstacles(self, start_point, end_point, exclude=[]):
         """
-        Vérifie si le segment reliant la position "start_point" à la position "end_point" traverse un obstacle
+        Vérifie si le segment reliant la position "start_point" à la position "end_point" traverse un obstacle statique (éléments fixes du plateau)
+        ou dynamique (autres robots)
 
         Paramètres
         ----------
@@ -274,6 +275,18 @@ class NavigationNode():
 
         path = self.find_path(self.graph, self.robot_data.position, self.position_goal)
         rospy.loginfo('Path found: ' + str(path))
+        self.publish_pic_msg(path)
+        
+    
+    def publish_pic_msg(self, path):
+        """
+        Publie un message ordonnant au robot de suivre le chemin "path"
+
+        Paramètres
+        ----------
+            - path : liste\n
+                Liste ordonnée des noeuds constituant le chemin
+        """
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'CHAINEDMOVE'
@@ -281,7 +294,7 @@ class NavigationNode():
             msg.action_msg += ' ' + str(self.graph.nodes[node]["x"]) + ' ' + str(-self.graph.nodes[node]["y"])
         msg.action_msg += ' ' + str(self.position_goal.x) + ' ' + str(-self.position_goal.y)
         self.action_orders_pub.publish(msg)
-    
+
     def robot_data_callback(self, msg):
         self.robot_data = msg
     
@@ -323,23 +336,27 @@ if __name__ == "__main__":
 
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
-        if (Nav_node.robot_data.position.x, Nav_node.robot_data.position.y) != (Nav_node.next_point.x, Nav_node.next_point.y):
-            start = time.time()
+        if avoidance_mode == 'default':
+            if (Nav_node.robot_data.position.x, Nav_node.robot_data.position.y) != (Nav_node.next_point.x, Nav_node.next_point.y):
+                start = time.time()
 
-            # On calcule l'équation de droite reliant la position du robot au prochain point
-            a, b = Nav_node.get_line_equation(Nav_node.robot_data.position, Nav_node.next_point)
+                # On calcule l'équation de droite reliant la position du robot au prochain point
+                a, b = Nav_node.get_line_equation(Nav_node.robot_data.position, Nav_node.next_point)
 
-            if np.sqrt((Nav_node.robot_data.position.x - Nav_node.next_point.x)**2 + (Nav_node.robot_data.position.y - Nav_node.next_point.y)**2) > Nav_node.avoidance_trigger_distance:
-                # On trouve le point situé à une distance "avoidance_trigger_distance" du robot
-                x_avoid = np.sqrt(avoidance_trigger_distance**2 / (1 + a**2)) + Nav_node.robot_data.position.x
-                y_avoid = a * x_avoid + b
-            else:
-                x_avoid = Nav_node.next_point.x
-                y_avoid = Nav_node.next_point.y
+                if np.sqrt((Nav_node.robot_data.position.x - Nav_node.next_point.x)**2 + (Nav_node.robot_data.position.y - Nav_node.next_point.y)**2) > Nav_node.avoidance_trigger_distance:
+                    # On trouve le point situé à une distance "avoidance_trigger_distance" du robot
+                    x_avoid = np.sqrt(avoidance_trigger_distance**2 / (1 + a**2)) + Nav_node.robot_data.position.x
+                    y_avoid = a * x_avoid + b
+                else:
+                    x_avoid = Nav_node.next_point.x
+                    y_avoid = Nav_node.next_point.y
 
-            obstacle = Nav_node.verify_obstacles((Nav_node.robot_data.position.x, Nav_node.robot_data.position.y), (x_avoid, y_avoid), ['static'])
-            rospy.loginfo('Time to verify obstacles: ' + str(time.time() - start))
-            if obstacle != None:
-                rospy.loginfo(obstacle)
+                obstacle = Nav_node.verify_obstacles((Nav_node.robot_data.position.x, Nav_node.robot_data.position.y), (x_avoid, y_avoid), ['static'])
+                rospy.loginfo('Time to verify obstacles: ' + str(time.time() - start))
+                if obstacle != None:
+                    rospy.loginfo('Obstacle detected at %.2f, %.2f' % (obstacle.center.x, obstacle.center.y))
+                    path = Nav_node.find_path(Nav_node.graph, Nav_node.robot_data.position, Nav_node.position_goal)
+                    rospy.loginfo('Alternative Path found: ' + str(path))
+                    Nav_node.publish_pic_msg(path)
         rospy.sleep(0.2)
             
