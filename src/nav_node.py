@@ -214,7 +214,7 @@ class NavigationNode():
             for obstacle in self.obstacles.circles:
                 xc = obstacle.center.x
                 yc = obstacle.center.y
-                R = obstacle.radius
+                R = self.avoidance_trigger_distance
 
                 # Calculs des coefficients de l'équation
                 a = m**2 + 1
@@ -234,6 +234,23 @@ class NavigationNode():
                         return obstacle
             return None
 
+    def rm_edges_around_obstacle(self, obstacle):
+        """
+        Supprime les arêtes du graphe qui traversent l'obstacle
+
+        Paramètres
+        ----------
+            - obstacle : Circle\n
+                Obstacle à prendre en compte
+        """
+        graph_modified = self.graph.copy()
+        for edge in self.graph.edges():
+            start_node = (self.graph.nodes[edge[0]]['x'], self.graph.nodes[edge[0]]['y'])
+            end_node = (self.graph.nodes[edge[1]]['x'], self.graph.nodes[edge[1]]['y'])
+            if self.verify_obstacles(start_node, end_node, ['static']) != None:
+                graph_modified.remove_edge(edge[0], edge[1])
+        
+        return graph_modified
 
     def find_path(self, graph, start_point, end_point):
         """
@@ -321,11 +338,11 @@ if __name__ == "__main__":
     robot_y_dimension = rospy.get_param('~robot_y_dimension', 0.2) #m
 
     # Déclaration des Publishers
-    action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=10)
+    action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
 
     # Création de la classe NavigationNode
     Nav_node = NavigationNode(avoidance_mode, avoidance_trigger_distance, emergency_stop_distance,
-                                robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file)
+                              robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
@@ -354,7 +371,10 @@ if __name__ == "__main__":
                 rospy.loginfo('Time to verify obstacles: ' + str(time.time() - start))
                 if obstacle != None:
                     rospy.loginfo('Obstacle detected at %.2f, %.2f' % (obstacle.center.x, obstacle.center.y))
-                    path = Nav_node.find_path(Nav_node.graph, Nav_node.robot_data.position, Nav_node.position_goal)
+                    NavigationNode.avoidance_trigger_distance = 0.2
+                    graph_modified = Nav_node.rm_edges_around_obstacle(obstacle)
+
+                    path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal)
                     rospy.loginfo('Alternative Path found: ' + str(path))
                     Nav_node.publish_pic_msg(path)
         rospy.sleep(0.05)
