@@ -2,10 +2,12 @@ import rospy
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
 from cdf_msgs.msg import RobotData, Pic_Action
+from virtual_robot.msg import Virtual_Robot_ActionAction, Virtual_Robot_ActionGoal
 import networkx as nx
 import numpy as np
 import time
 import cv2
+import actionlib
 
 class NavigationNode():
     """
@@ -63,6 +65,8 @@ class NavigationNode():
         self.avoidance_trigger_distance = avoidance_trigger_distance
         self.emergency_stop_distance = emergency_stop_distance
 
+        self.action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
+
         self.robot_x_dimension = robot_x_dimension
         self.robot_y_dimension = robot_y_dimension
         self.robot_data = RobotData()
@@ -97,7 +101,7 @@ class NavigationNode():
         
         return maps["item_obstacle_map"]["data"]
 
-    def find_closest_node(self, start_pos, graph, exclude=[]):
+    def find_closest_node(self, start_pos, graph, exclude=[], trigger_distance=0.5):
         """
         Trouve le noeud le plus proche de la position "start_pos"
 
@@ -124,7 +128,7 @@ class NavigationNode():
             if distance < closest_distance:
                 closest_distance = distance
                 closest_node = node
-        if self.verify_obstacles((start_pos.x, start_pos.y), (graph.nodes[closest_node]["x"], graph.nodes[closest_node]["y"]), exclude='start_and_end'):
+        if self.verify_obstacles((start_pos.x, start_pos.y), (graph.nodes[closest_node]["x"], graph.nodes[closest_node]["y"]), exclude='start_and_end', trigger_distance=trigger_distance):
             closest_node = self.find_closest_node(self, start_pos, graph, exclude=exclude.append(node))
         return closest_node
 
@@ -150,7 +154,7 @@ class NavigationNode():
         b = start_pos[1] - a * start_pos[0]
         return a, b
     
-    def verify_obstacles(self, start_point, end_point, exclude=[]):
+    def verify_obstacles(self, start_point, end_point, exclude=[], trigger_distance=0.5):
         """
         Vérifie si le segment reliant la position "start_point" à la position "end_point" traverse un obstacle statique (éléments fixes du plateau)
         ou dynamique (autres robots)
@@ -214,7 +218,7 @@ class NavigationNode():
             for obstacle in self.obstacles.circles:
                 xc = obstacle.center.x
                 yc = obstacle.center.y
-                R = self.avoidance_trigger_distance
+                R = trigger_distance
 
                 # Calculs des coefficients de l'équation
                 a = m**2 + 1
@@ -252,7 +256,7 @@ class NavigationNode():
         
         return graph_modified
 
-    def find_path(self, graph, start_point, end_point):
+    def find_path(self, graph, start_point, end_point, trigger_distance=0.5):
         """
         Trouve le chemin le plus court reliant la position "start_point" à la position "end_point"
 
@@ -269,12 +273,14 @@ class NavigationNode():
         """
         start = time.time()
         # On cherche tout d'abord le noeud le plus proche du robot
-        start_node = self.find_closest_node(start_point, graph)
-        end_node = self.find_closest_node(end_point, graph)
+        start_node = self.find_closest_node(start_point, graph, trigger_distance=trigger_distance)
+        end_node = self.find_closest_node(end_point, graph, trigger_distance=trigger_distance)
 
         # On cherche le chemin le plus court entre le noeud le plus proche du robot et le noeud le plus proche de la position cible
-        path = nx.astar_path(graph, start_node, end_node)
-
+        try:
+            path = nx.astar_path(graph, start_node, end_node)
+        except nx.NetworkXNoPath:
+            path = None
         rospy.loginfo('Time to find shortest path: ' + str(time.time() - start))
         return path
 
@@ -290,8 +296,11 @@ class NavigationNode():
         self.position_goal = msg
 
         path = self.find_path(self.graph, self.robot_data.position, self.position_goal)
-        rospy.loginfo('Path found: ' + str(path))
-        self.publish_pic_msg(path)
+        if path != None:
+            rospy.loginfo('Path found: ' + str(path))
+            self.publish_pic_msg(path)
+        else:
+            rospy.loginfo('No path found')
         
     
     def publish_pic_msg(self, path):
@@ -310,6 +319,10 @@ class NavigationNode():
             msg.action_msg += ' ' + str(self.graph.nodes[node]["x"]) + ' ' + str(self.graph.nodes[node]["y"])
         msg.action_msg += ' ' + str(self.position_goal.x) + ' ' + str(self.position_goal.y)
         self.action_orders_pub.publish(msg)
+
+        action_client_goal = Virtual_Robot_ActionGoal()
+        action_client_goal.command = msg.action_msg
+        self.action_client.send_goal(action_client_goal)
 
     def robot_data_callback(self, msg):
         self.robot_data = msg
@@ -371,11 +384,13 @@ if __name__ == "__main__":
                 rospy.loginfo('Time to verify obstacles: ' + str(time.time() - start))
                 if obstacle != None:
                     rospy.loginfo('Obstacle detected at %.2f, %.2f' % (obstacle.center.x, obstacle.center.y))
-                    NavigationNode.avoidance_trigger_distance = 0.2
                     graph_modified = Nav_node.rm_edges_around_obstacle(obstacle)
 
-                    path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal)
-                    rospy.loginfo('Alternative Path found: ' + str(path))
-                    Nav_node.publish_pic_msg(path)
+                    path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal, 0.2)
+                    if path != None:
+                        rospy.loginfo('Alternative Path found: ' + str(path))
+                        Nav_node.publish_pic_msg(path)
+                    else:
+                        rospy.loginfo('No alternative path found')
         rospy.sleep(0.05)
             
