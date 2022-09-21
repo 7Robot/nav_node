@@ -1,3 +1,4 @@
+from distutils.log import debug
 import rospy
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
@@ -57,18 +58,22 @@ class NavigationNode():
                  emergency_stop_distance, robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file):
 
         self.action_orders_pub = action_orders_pub
+        # Recupération du fichier de graphe
         self.graph = nx.read_gml(graph_file)
 
+        # Récupération de la carte des obstacles statiques
         self.cv_map = self.__init_Cv(cv_obstacle_file)
 
+        # Réglage des distances d'évitement par défaut 
         self.avoidance_mode = avoidance_mode
         self.avoidance_trigger_distance = avoidance_trigger_distance
         self.emergency_stop_distance = emergency_stop_distance
 
-        self.action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
-
+        # Réglage des dimensions du robot
         self.robot_x_dimension = robot_x_dimension
         self.robot_y_dimension = robot_y_dimension
+
+        # Initialisation des Messages
         self.robot_data = RobotData()
         self.position_goal = Point()
         self.next_point = Point()
@@ -154,7 +159,7 @@ class NavigationNode():
         b = start_pos[1] - a * start_pos[0]
         return a, b
     
-    def verify_obstacles(self, start_point, end_point, exclude=[], trigger_distance=0.5):
+    def verify_obstacles(self, start_point, end_point, exclude=[], trigger_distance=None):
         """
         Vérifie si le segment reliant la position "start_point" à la position "end_point" traverse un obstacle statique (éléments fixes du plateau)
         ou dynamique (autres robots)
@@ -171,12 +176,16 @@ class NavigationNode():
                     - 'start_and_end' : ne considère pas le segement comme obstrué si il commence ou termine dans un obstacle
                     - 'static' : ne considère que les obstacles statiques (définis dans le fichier cv_obstacle_file)
                     - 'dynamic' : ne considère que les obstacles dynamiques renvoyés par le topic "obstacles"
+            - trigger_distance : float\n
+                Distance à laquelle un obstacle dynamique est considéré comme problématique
 
         Retourne
         --------
             - bool : True si le segment traverse un obstacle, False sinon
         """
-        # Verifing collisions with static obstacles
+        if trigger_distance is None: trigger_distance = self.avoidance_trigger_distance
+
+        # Vérification de collisions avec des obstacles statiques
         if 'static' not in exclude:
             oks = []
 
@@ -246,6 +255,11 @@ class NavigationNode():
         ----------
             - obstacle : Circle\n
                 Obstacle à prendre en compte
+        
+        Retourne
+        --------
+            - graph_modified : nx.Graph\n
+                Graphe comprenant les modifications sur les arrêtes
         """
         graph_modified = self.graph.copy()
         for edge in self.graph.edges():
@@ -266,6 +280,8 @@ class NavigationNode():
                 Position de départ du chemin
             - end_point : tuple (x, y)\n
                 Position d'arrivée du chemin
+            - trigger_distance : float\n
+                Distance à partir de laquelle on considère que le robot est dans une zone dangereuse
 
         Retourne
         --------
@@ -299,6 +315,7 @@ class NavigationNode():
         if path != None:
             rospy.loginfo('Path found: ' + str(path))
             self.publish_pic_msg(path)
+            self.next_point
         else:
             rospy.loginfo('No path found')
         
@@ -320,9 +337,10 @@ class NavigationNode():
         msg.action_msg += ' ' + str(self.position_goal.x) + ' ' + str(self.position_goal.y)
         self.action_orders_pub.publish(msg)
 
-        action_client_goal = Virtual_Robot_ActionGoal()
-        action_client_goal.command = msg.action_msg
-        self.action_client.send_goal(action_client_goal)
+        if debug_mode:
+            action_client_goal = Virtual_Robot_ActionGoal()
+            action_client_goal.command = msg.action_msg
+            action_client.send_goal(action_client_goal)
 
     def robot_data_callback(self, msg):
         self.robot_data = msg
@@ -343,6 +361,7 @@ if __name__ == "__main__":
     next_point_topic = rospy.get_param('~next_point_topic', '/robot_x/asserv_next_point')
     graph_file = rospy.get_param('~graph_file', 'default')
     cv_obstacle_file = rospy.get_param('~cv_obstacle_file', 'default')
+    debug_mode = rospy.get_param('~debug_mode', False)
     avoidance_mode = rospy.get_param('~avoidance_mode', 'default')
     avoidance_trigger_distance = rospy.get_param('~avoidance_trigger_distance', 0.5) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.5) #m
@@ -352,6 +371,9 @@ if __name__ == "__main__":
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
+
+    if debug_mode:
+        action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
 
     # Création de la classe NavigationNode
     Nav_node = NavigationNode(avoidance_mode, avoidance_trigger_distance, emergency_stop_distance,
