@@ -159,12 +159,12 @@ class NavigationNode():
         graph_modified = graph.copy()
         graph_modified.add_node("temp_end_node", x=end_pos.x, y=end_pos.y)
         graph_modified.add_node("temp_start_node", x=start_pos.x, y=start_pos.y)
-        for node in graph.nodes():
-            if not self.verify_obstacles((graph.nodes[node]["x"], graph.nodes[node]["y"]), (end_pos.x, end_pos.y), exclude=['start_and_end']):
-                graph_modified.add_edge(node, "temp_end_node", weight=np.sqrt((graph.nodes[node]["x"] - end_pos.x)**2 + (graph.nodes[node]["y"] - end_pos.y)**2))
+        for node in graph_modified.nodes():
+            if not self.verify_obstacles((graph_modified.nodes[node]["x"], graph_modified.nodes[node]["y"]), (end_pos.x, end_pos.y), exclude=['start_and_end', 'dynamic']):
+                graph_modified.add_edge(node, "temp_end_node", weight=np.sqrt((graph_modified.nodes[node]["x"] - end_pos.x)**2 + (graph_modified.nodes[node]["y"] - end_pos.y)**2))
             
-            if not self.verify_obstacles((graph.nodes[node]["x"], graph.nodes[node]["y"]), (start_pos.x, start_pos.y), exclude=['start_and_end']):
-                graph_modified.add_edge(node, "temp_start_node", weight=np.sqrt((graph.nodes[node]["x"] - start_pos.x)**2 + (graph.nodes[node]["y"] - start_pos.y)**2))
+            if not self.verify_obstacles((graph_modified.nodes[node]["x"], graph_modified.nodes[node]["y"]), (start_pos.x, start_pos.y), exclude=['start_and_end', 'dynamic']):
+                graph_modified.add_edge(node, "temp_start_node", weight=np.sqrt((graph_modified.nodes[node]["x"] - start_pos.x)**2 + (graph_modified.nodes[node]["y"] - start_pos.y)**2))
         return graph_modified
         
     def get_line_equation(self, start_pos, end_pos):
@@ -243,9 +243,12 @@ class NavigationNode():
             # Si le point d'arrivé ou le point de départ se trouve dans un obstacle et que les point d'arrivé et de départs sont exclu
             if 'start_and_end' in exclude and (self.cv_map[y1, x1] != 0 or self.cv_map[y2, x2] != 0): return False 
 
-            if np.max(oks) != 0:
-                return True
-            else:
+            try:
+                if np.max(oks) != 0:
+                    return True
+                else:
+                    return None
+            except:
                 return None
         # Verifing collisions with dynamic obstacles
         elif exclude != 'dynamic':
@@ -299,9 +302,13 @@ class NavigationNode():
             if self.verify_obstacles(start_node, end_node, ['static']) != None:
                 graph_modified.remove_edge(edge[0], edge[1])
         
+        # On supprime les noeuds qui sont dans le cercle de l'obstacle
+        for node in self.graph.nodes():
+            if np.sqrt((self.graph.nodes[node]['x'] - obstacle.center.x)**2 + (self.graph.nodes[node]['y'] - obstacle.center.y)**2) < self.avoidance_trigger_distance:
+                graph_modified.remove_node(node)
         return graph_modified
 
-    def find_path(self, graph, start_point, end_point, trigger_distance=0.5):
+    def find_path(self, graph, start_point, end_point, method='shortest_path'):
         """
         Trouve le chemin le plus court reliant la position "start_point" à la position "end_point"
 
@@ -319,14 +326,18 @@ class NavigationNode():
             - path : liste ordonnée de l'id des noeuds constituant le chemin
         """
         start = time.time()
-        # On cherche tout d'abord le noeud le plus proche du robot
-        #start_node = self.find_closest_node(start_point, graph, trigger_distance=trigger_distance)
-        #end_node = self.find_closest_node(end_point, graph, trigger_distance=trigger_distance)
-        graph_with_startandend = self.add_temporary_nodeandedge(start_point, end_point, graph)
+        if method == 'closest_node':
+            # On cherche tout d'abord le noeud le plus proche du robot
+            start_node = self.find_closest_node(start_point, graph, trigger_distance=0.2)
+            end_node = self.find_closest_node(end_point, graph, trigger_distance=0.2)
+        elif method == 'shortest_path':
+            graph = self.add_temporary_nodeandedge(start_point, end_point, graph)
+            start_node = "temp_start_node"
+            end_node = "temp_end_node"
 
         # On cherche le chemin le plus court entre le noeud le plus proche du robot et le noeud le plus proche de la position cible
         try:
-            path = nx.astar_path(graph_with_startandend, "temp_start_node", "temp_end_node")
+            path = nx.astar_path(graph, start_node, end_node)
         except nx.NetworkXNoPath:
             path = None
         rospy.loginfo('Time to find shortest path: ' + str(time.time() - start))
@@ -440,7 +451,7 @@ if __name__ == "__main__":
                     rospy.loginfo('Obstacle detected at %.2f, %.2f' % (obstacle.center.x, obstacle.center.y))
                     graph_modified = Nav_node.rm_edges_around_obstacle(obstacle)
 
-                    path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal, 0.2)
+                    path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal, 'closest_node')
                     if path != None:
                         rospy.loginfo('Alternative Path found: ' + str(path))
                         Nav_node.publish_pic_msg(path)
