@@ -1,4 +1,5 @@
 from distutils.log import debug
+from hashlib import new
 import rospy
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
@@ -137,6 +138,35 @@ class NavigationNode():
             closest_node = self.find_closest_node(self, start_pos, graph, exclude=exclude.append(node))
         return closest_node
 
+    def add_temporary_nodeandedge(self, start_pos, end_pos, graph):
+        """
+        Ajoute un noeud temporaire et une arête entre le noeud le plus proche de la position "start_pos" et le noeud temporaire
+
+        Paramètres
+        ----------
+            - start_pos : tuple (x, y)\n
+                Position de départ du chemin
+            - end_pos : tuple (x, y)\n
+                Position d'arrivée du chemin
+            - graph : networkx.Graph\n
+                Graphe contenant les noeuds
+        
+        Retourne
+        --------
+            - graph : networkx.Graph\n
+                Graphe contenant les noeuds
+        """
+        graph_modified = graph.copy()
+        graph_modified.add_node("temp_end_node", x=end_pos.x, y=end_pos.y)
+        graph_modified.add_node("temp_start_node", x=start_pos.x, y=start_pos.y)
+        for node in graph.nodes():
+            if not self.verify_obstacles((graph.nodes[node]["x"], graph.nodes[node]["y"]), (end_pos.x, end_pos.y), exclude=['start_and_end']):
+                graph_modified.add_edge(node, "temp_end_node", weight=np.sqrt((graph.nodes[node]["x"] - end_pos.x)**2 + (graph.nodes[node]["y"] - end_pos.y)**2))
+            
+            if not self.verify_obstacles((graph.nodes[node]["x"], graph.nodes[node]["y"]), (start_pos.x, start_pos.y), exclude=['start_and_end']):
+                graph_modified.add_edge(node, "temp_start_node", weight=np.sqrt((graph.nodes[node]["x"] - start_pos.x)**2 + (graph.nodes[node]["y"] - start_pos.y)**2))
+        return graph_modified
+        
     def get_line_equation(self, start_pos, end_pos):
         """
         Retourne l'équation de la droite passant par les deux points
@@ -188,29 +218,30 @@ class NavigationNode():
         # Vérification de collisions avec des obstacles statiques
         if 'static' not in exclude:
             oks = []
-
-            if start_point[1] < end_point[1] and start_point[0] < end_point[0]:
-                for alpha in np.arange(0., 1., 1 / max(abs(start_point[1] - end_point[1]), abs(start_point[0] - end_point[0]))) :
-                    newx = int(start_point[0] + alpha * (max(start_point[0], end_point[0]) - min(start_point[0], end_point[0])))
-                    newy = int(start_point[1] + alpha * (max(start_point[1], end_point[1]) - min(start_point[1], end_point[1])))
+            x1, y1 = int(start_point[0]*100), int(start_point[1]*100)
+            x2, y2 = int(end_point[0]*100), int(end_point[1]*100)
+            if y1 < y2 and x1 < x2:
+                for alpha in np.arange(0., 1., 1 / max(abs(y1 - y2), abs(x1 - x2))) :
+                    newx = int(x1 + alpha * (max(x1, x2) - min(x1, x2)))
+                    newy = int(y1 + alpha * (max(y1, y2) - min(y1, y2)))
                     oks.append(self.cv_map[newy, newx])
-            elif start_point[1] > end_point[1] and start_point[0] < end_point[0]:
-                for alpha in np.arange(0., 1., 1 / max(abs(start_point[1] - end_point[1]), abs(start_point[0] - end_point[0]))) :
-                    newx = int(start_point[0] + alpha * (max(start_point[0], end_point[0]) - min(start_point[0], end_point[0])))
-                    newy = int(start_point[1] - alpha * (max(start_point[1], end_point[1]) - min(start_point[1], end_point[1])))
+            elif y1 > y2 and x1 < x2:
+                for alpha in np.arange(0., 1., 1 / max(abs(y1 - y2), abs(x1 - x2))) :
+                    newx = int(x1 + alpha * (max(x1, x2) - min(x1, x2)))
+                    newy = int(y1 - alpha * (max(y1, y2) - min(y1, y2)))
                     oks.append(self.cv_map[newy, newx])
-            elif start_point[1] < end_point[1] and start_point[0] > end_point[0]:
-                for alpha in np.arange(0., 1., 1 / max(abs(start_point[1] - end_point[1]), abs(start_point[0] - end_point[0]))) :
-                    newx = int(start_point[0] - alpha * (max(start_point[0], end_point[0]) - min(start_point[0], end_point[0])))
-                    newy = int(start_point[1] + alpha * (max(start_point[1], end_point[1]) - min(start_point[1], end_point[1])))
+            elif y1 < y2 and x1 > x2:
+                for alpha in np.arange(0., 1., 1 / max(abs(y1 - y2), abs(x1 - x2))) :
+                    newx = int(x1 - alpha * (max(x1, x2) - min(x1, x2)))
+                    newy = int(y1 + alpha * (max(y1, y2) - min(y1, y2)))
                     oks.append(self.cv_map[newy, newx])
-            elif start_point[1] > end_point[1] and start_point[0] > end_point[0]:
-                for alpha in np.arange(0., 1., 1 / max(abs(start_point[1] - end_point[1]), abs(start_point[0] - end_point[0]))) :
-                    newx = int(start_point[0] - alpha * (max(start_point[0], end_point[0]) - min(start_point[0], end_point[0])))
-                    newy = int(start_point[1] - alpha * (max(start_point[1], end_point[1]) - min(start_point[1], end_point[1])))
+            elif y1 > y2 and x1 > x2:
+                for alpha in np.arange(0., 1., 1 / max(abs(y1 - y2), abs(x1 - x2))) :
+                    newx = int(x1 - alpha * (max(x1, x2) - min(x1, x2)))
+                    newy = int(y1 - alpha * (max(y1, y2) - min(y1, y2)))
                     oks.append(self.cv_map[newy, newx])
             # Si le point d'arrivé ou le point de départ se trouve dans un obstacle et que les point d'arrivé et de départs sont exclu
-            if 'start_and_end' in exclude and (max(start_point) != 0 or max(end_point) != 0): return False 
+            if 'start_and_end' in exclude and (self.cv_map[y1, x1] != 0 or self.cv_map[y2, x2] != 0): return False 
 
             if np.max(oks) != 0:
                 return True
@@ -289,12 +320,13 @@ class NavigationNode():
         """
         start = time.time()
         # On cherche tout d'abord le noeud le plus proche du robot
-        start_node = self.find_closest_node(start_point, graph, trigger_distance=trigger_distance)
-        end_node = self.find_closest_node(end_point, graph, trigger_distance=trigger_distance)
+        #start_node = self.find_closest_node(start_point, graph, trigger_distance=trigger_distance)
+        #end_node = self.find_closest_node(end_point, graph, trigger_distance=trigger_distance)
+        graph_with_startandend = self.add_temporary_nodeandedge(start_point, end_point, graph)
 
         # On cherche le chemin le plus court entre le noeud le plus proche du robot et le noeud le plus proche de la position cible
         try:
-            path = nx.astar_path(graph, start_node, end_node)
+            path = nx.astar_path(graph_with_startandend, "temp_start_node", "temp_end_node")
         except nx.NetworkXNoPath:
             path = None
         rospy.loginfo('Time to find shortest path: ' + str(time.time() - start))
@@ -332,7 +364,7 @@ class NavigationNode():
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'CHAINEDMOVE'
-        for node in path:
+        for node in path[1:-1]:
             msg.action_msg += ' ' + str(self.graph.nodes[node]["x"]) + ' ' + str(self.graph.nodes[node]["y"])
         msg.action_msg += ' ' + str(self.position_goal.x) + ' ' + str(self.position_goal.y)
         self.action_orders_pub.publish(msg)
