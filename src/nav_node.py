@@ -5,6 +5,7 @@ from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
 from cdf_msgs.msg import RobotData, Pic_Action
 from virtual_robot.msg import Virtual_Robot_ActionAction, Virtual_Robot_ActionGoal
+from std_msgs.msg import Bool
 import networkx as nx
 import numpy as np
 import time
@@ -73,6 +74,8 @@ class NavigationNode():
         # Réglage des dimensions du robot
         self.robot_x_dimension = robot_x_dimension
         self.robot_y_dimension = robot_y_dimension
+
+        self.alternaive_path_given = False
 
         # Initialisation des Messages
         self.robot_data = RobotData()
@@ -393,7 +396,11 @@ class NavigationNode():
 
     def next_point_callback(self, msg):
         self.next_point = msg
-        
+    
+    def motion_done_callback(self, msg):
+        if msg.data:
+            self.alternaive_path_given = False
+
 
 if __name__ == "__main__":
     rospy.init_node('navigation_node', anonymous=False)
@@ -406,8 +413,8 @@ if __name__ == "__main__":
     cv_obstacle_file = rospy.get_param('~cv_obstacle_file', 'default')
     debug_mode = rospy.get_param('~debug_mode', False)
     avoidance_mode = rospy.get_param('~avoidance_mode', 'default')
-    avoidance_trigger_distance = rospy.get_param('~avoidance_trigger_distance', 0.5) #m
-    emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.5) #m
+    avoidance_trigger_distance = rospy.get_param('~avoidance_trigger_distance', 0.3) #m
+    emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_x/Odom')
     robot_x_dimension = rospy.get_param('~robot_x_dimension', 0.5) #m
     robot_y_dimension = rospy.get_param('~robot_y_dimension', 0.2) #m
@@ -427,6 +434,7 @@ if __name__ == "__main__":
     rospy.Subscriber(robot_data_topic, RobotData, Nav_node.robot_data_callback)
     rospy.Subscriber(obstacles_topic, Obstacles, Nav_node.obstacles_callback)
     rospy.Subscriber(next_point_topic, Point, Nav_node.next_point_callback)
+    rospy.Subscriber('/robot_x/motion_done', Bool, Nav_node.motion_done_callback)
 
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
@@ -452,9 +460,11 @@ if __name__ == "__main__":
                     graph_modified = Nav_node.rm_edges_around_obstacle(obstacle)
 
                     path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal, 'closest_node')
-                    if path != None:
+                    if path != None and Nav_node.alternaive_path_given == False:
                         rospy.loginfo('Alternative Path found: ' + str(path))
                         Nav_node.publish_pic_msg(path)
+                        Nav_node.alternaive_path_given = True
+                        rospy.wait_for_message("/robot_x/motion_done", Bool)
                     else:
                         rospy.loginfo('No alternative path found')
         rospy.sleep(0.05)
