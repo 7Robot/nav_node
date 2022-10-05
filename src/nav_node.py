@@ -131,14 +131,17 @@ class NavigationNode():
         closest_node = None
         closest_distance = float('inf')
         nodes = graph.nodes()
-        for node in exclude: nodes.remove(node)
+
+        for node in exclude: nodes.remove_node(node)
         for node in nodes:
             distance = np.sqrt((start_pos.x - graph.nodes[node]["x"])**2 + (start_pos.y - graph.nodes[node]["y"])**2)
             if distance < closest_distance:
                 closest_distance = distance
                 closest_node = node
         if self.verify_obstacles((start_pos.x, start_pos.y), (graph.nodes[closest_node]["x"], graph.nodes[closest_node]["y"]), exclude='start_and_end', trigger_distance=trigger_distance):
-            closest_node = self.find_closest_node(self, start_pos, graph, exclude=exclude.append(node))
+            node_to_exclude = exclude.append(node)
+            print(node_to_exclude)
+            closest_node = self.find_closest_node(start_pos, graph, exclude=exclude.append(node))
         return closest_node
 
     def add_temporary_nodeandedge(self, start_pos, end_pos, graph):
@@ -163,10 +166,10 @@ class NavigationNode():
         graph_modified.add_node("temp_end_node", x=end_pos.x, y=end_pos.y)
         graph_modified.add_node("temp_start_node", x=start_pos.x, y=start_pos.y)
         for node in graph_modified.nodes():
-            if not self.verify_obstacles((graph_modified.nodes[node]["x"], graph_modified.nodes[node]["y"]), (end_pos.x, end_pos.y), exclude=['start_and_end', 'dynamic']):
+            if not self.verify_obstacles((graph_modified.nodes[node]["x"], graph_modified.nodes[node]["y"]), (end_pos.x, end_pos.y), exclude=['dynamic']):
                 graph_modified.add_edge(node, "temp_end_node", weight=np.sqrt((graph_modified.nodes[node]["x"] - end_pos.x)**2 + (graph_modified.nodes[node]["y"] - end_pos.y)**2))
             
-            if not self.verify_obstacles((graph_modified.nodes[node]["x"], graph_modified.nodes[node]["y"]), (start_pos.x, start_pos.y), exclude=['start_and_end', 'dynamic']):
+            if not self.verify_obstacles((graph_modified.nodes[node]["x"], graph_modified.nodes[node]["y"]), (start_pos.x, start_pos.y), exclude=['dynamic']):
                 graph_modified.add_edge(node, "temp_start_node", weight=np.sqrt((graph_modified.nodes[node]["x"] - start_pos.x)**2 + (graph_modified.nodes[node]["y"] - start_pos.y)**2))
         return graph_modified
         
@@ -398,8 +401,7 @@ class NavigationNode():
         self.next_point = msg
     
     def motion_done_callback(self, msg):
-        if msg.data:
-            self.alternaive_path_given = False
+        pass
 
 
 if __name__ == "__main__":
@@ -454,9 +456,8 @@ if __name__ == "__main__":
                     y_avoid = Nav_node.next_point.y
 
                 obstacle = Nav_node.verify_obstacles((Nav_node.robot_data.position.x, Nav_node.robot_data.position.y), (x_avoid, y_avoid), ['static'])
-                rospy.loginfo('Time to verify obstacles: ' + str(time.time() - start))
                 if obstacle != None:
-                    rospy.loginfo('Obstacle detected at %.2f, %.2f' % (obstacle.center.x, obstacle.center.y))
+                    rospy.loginfo('New Obstacle detected at %.2f, %.2f' % (obstacle.center.x, obstacle.center.y))
                     graph_modified = Nav_node.rm_edges_around_obstacle(obstacle)
 
                     path = Nav_node.find_path(graph_modified, Nav_node.robot_data.position, Nav_node.position_goal, 'closest_node')
@@ -465,7 +466,9 @@ if __name__ == "__main__":
                         Nav_node.publish_pic_msg(path)
                         Nav_node.alternaive_path_given = True
                         rospy.wait_for_message("/robot_x/motion_done", Bool)
-                    else:
+                    elif path == None:
                         rospy.loginfo('No alternative path found')
+                else:
+                    Nav_node.alternaive_path_given = False
         rospy.sleep(0.05)
             
