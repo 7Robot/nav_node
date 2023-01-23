@@ -62,6 +62,7 @@ class NavigationNode():
         self.action_orders_pub = action_orders_pub
         # Recupération du fichier de graphe
         self.graph = nx.read_gml(graph_file)
+        self.graph_modified = self.graph.copy()
 
         # Récupération de la carte des obstacles statiques
         self.cv_map = self.__init_Cv(cv_obstacle_file)
@@ -128,6 +129,7 @@ class NavigationNode():
             - node : int\n
                 Id du noeud le plus proche de la position "start_pos"
         """
+        
         closest_node = None
         closest_distance = float('inf')
         nodes = graph.nodes()
@@ -343,7 +345,8 @@ class NavigationNode():
 
         # On cherche le chemin le plus court entre le noeud le plus proche du robot et le noeud le plus proche de la position cible
         try:
-            path = nx.astar_path(graph, start_node, end_node)
+            self.graph_modified = graph
+            path = nx.astar_path(graph, start_node, end_node, heuristic=None, weight='weight')
         except nx.NetworkXNoPath:
             path = None
         rospy.loginfo('Time to find shortest path: ' + str(time.time() - start))
@@ -402,6 +405,15 @@ class NavigationNode():
     
     def motion_done_callback(self, msg):
         pass
+
+    def heuristic_function(Nav_Node , a, b):
+        G = Nav_Node.graph_modified
+        (x1, y1) = (G.nodes[a]['x'], G.nodes[a]['y'])
+        (x2, y2) = (G.nodes[b]['x'], G.nodes[b]['y'])
+        
+        result = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+
+        return result
 
 
 if __name__ == "__main__":
