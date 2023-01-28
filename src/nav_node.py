@@ -11,6 +11,7 @@ import numpy as np
 import time
 import cv2
 import actionlib
+import matplotlib.pyplot as plt
 
 class NavigationNode():
     """
@@ -102,6 +103,8 @@ class NavigationNode():
             "item_obstacle_map": {"data": img[:, :, 2], "dilate": ROBOT_RADIUS},
             "disable_evitement_map": {"data": img[:, :, 0], "dilate": DIST_EVITEMENT}
         }
+
+        plt.imshow(maps["item_obstacle_map"]["data"])
         
         for m in maps.values():
             if m["dilate"] is not None:
