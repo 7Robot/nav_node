@@ -72,6 +72,10 @@ class NavigationNode():
         self.avoidance_trigger_distance = avoidance_trigger_distance
         self.emergency_stop_distance = emergency_stop_distance
 
+        # Réglage de la discrétisationd du plateau
+        self.map_width = 300
+        self.map_height = 200
+
         # Réglage des dimensions du robot
         self.robot_x_dimension = robot_x_dimension
         self.robot_y_dimension = robot_y_dimension
@@ -96,6 +100,9 @@ class NavigationNode():
         DIST_EVITEMENT = 30  # cm
         
         img = cv2.imread(filename)
+
+        self.map_width = img.shape[1]/MAP_PRECISION
+        self.map_height = img.shape[0]/MAP_PRECISION
 
         maps = {
             "hard_obstacle_map": {"data": img[:, :, 0], "dilate": ROBOT_RADIUS},
@@ -193,7 +200,10 @@ class NavigationNode():
             - b : float\n
                 Ordonnée à l'origine de la droite
         """
-        a = (end_pos[1] - start_pos[1]) / (end_pos[0] - start_pos[0])
+        try:
+            a = (end_pos[1] - start_pos[1]) / (end_pos[0] - start_pos[0])
+        except:
+            a = 0
         b = start_pos[1] - a * start_pos[0]
         return a, b
     
@@ -316,42 +326,54 @@ class NavigationNode():
                 graph_modified.remove_node(node)
         return graph_modified
 
-    def find_path(self, graph, start_point, end_point, method='shortest_path'):
+    def find_path(self, start_point, end_point, discretisation=5):
         """
-        Trouve le chemin le plus court reliant la position "start_point" à la position "end_point"
+        Trouve le chemin le plus court entre deux points
 
         Paramètres
         ----------
-            - start_point : tuple (x, y)\n
-                Position de départ du chemin
-            - end_point : tuple (x, y)\n
-                Position d'arrivée du chemin
-            - trigger_distance : float\n
-                Distance à partir de laquelle on considère que le robot est dans une zone dangereuse
-
+            - start_point : Point\n
+                Point de départ
+            - end_point : Point\n
+                Point d'arrivée
+        
         Retourne
         --------
-            - path : liste ordonnée de l'id des noeuds constituant le chemin
+            - path : list\n
+                Liste ordonnée des noeuds constituant le chemin
         """
-        start = time.time()
-        if method == 'closest_node':
-            # On cherche tout d'abord le noeud le plus proche du robot
-            start_node = self.find_closest_node(start_point, graph, trigger_distance=0.2)
-            end_node = self.find_closest_node(end_point, graph, trigger_distance=0.2)
-        elif method == 'shortest_path':
-            graph = self.add_temporary_nodeandedge(start_point, end_point, graph)
-            start_node = "temp_start_node"
-            end_node = "temp_end_node"
+        s_start=(int(100*start_point.x/discretisation), int(100*start_point.y/discretisation))
+        s_end=(int(100*end_point.x/discretisation), int(100*end_point.y/discretisation))
 
-        # On cherche le chemin le plus court entre le noeud le plus proche du robot et le noeud le plus proche de la position cible
-        try:
-            self.graph_modified = graph
-            path = nx.astar_path(graph, start_node, end_node, heuristic=None, weight='weight')
-        except nx.NetworkXNoPath:
-            path = None
-        rospy.loginfo('Time to find shortest path: ' + str(time.time() - start))
-        return path
+        t = time.time()
 
+        dstar = DStar(s_start=s_start, s_goal=s_end, w=int(self.map_width/discretisation), h=int(self.map_height/discretisation))
+
+        for i in range(int(len(self.cv_map)/discretisation)):
+            for j in range(int(len(self.cv_map[0])/discretisation)):
+                if self.cv_map[i*discretisation, j*discretisation] != 0:
+                    dstar.Env.add_obstacle((j, i))
+        
+        print("Start : ", t)
+        dstar.init()
+        dstar.insert(s_end, 0)
+
+        while True:
+            dstar.process_state()
+            if dstar.t[s_start] == 'CLOSED':
+                break
+        
+
+        print("End : ", time.time() - t)
+        dstar.path = dstar.extract_path(s_start, s_end)
+        
+        converted_path = []
+        for point in dstar.path:
+            converted_path.append((discretisation*point[0]/100, discretisation*point[1]/100))
+
+        self.publish_pic_msg(converted_path)
+
+        
     def position_goal_callback(self, msg):
         """
         Callback permettant de récupérer la position cible
@@ -363,7 +385,7 @@ class NavigationNode():
         """
         self.position_goal = msg
 
-        path = self.find_path(self.graph, self.robot_data.position, self.position_goal)
+        path = self.find_path(self.robot_data.position, self.position_goal)
         if path != None:
             rospy.loginfo('Path found: ' + str(path))
             self.publish_pic_msg(path)
@@ -371,7 +393,6 @@ class NavigationNode():
         else:
             rospy.loginfo('No path found')
         
-    
     def publish_pic_msg(self, path):
         """
         Publie un message ordonnant au robot de suivre le chemin "path"
@@ -385,7 +406,7 @@ class NavigationNode():
         msg.action_destination = 'motor'
         msg.action_msg = 'CHAINEDMOVE'
         for node in path[1:-1]:
-            msg.action_msg += ' ' + str(self.graph.nodes[node]["x"]) + ' ' + str(self.graph.nodes[node]["y"])
+            msg.action_msg += ' ' + str(node[0]) + ' ' + str(node[1])
         msg.action_msg += ' ' + str(self.position_goal.x) + ' ' + str(self.position_goal.y)
         self.action_orders_pub.publish(msg)
 
@@ -406,14 +427,258 @@ class NavigationNode():
     def motion_done_callback(self, msg):
         pass
 
-    def heuristic_function(Nav_Node , a, b):
-        G = Nav_Node.graph_modified
-        (x1, y1) = (G.nodes[a]['x'], G.nodes[a]['y'])
-        (x2, y2) = (G.nodes[b]['x'], G.nodes[b]['y'])
-        
-        result = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+class Env:
+    def __init__(self, w, h):
+        self.x_range = w  # size of background
+        self.y_range = h
+        self.motions = [(-1, 0), (-1, 1), (0, 1), (1, 1),
+                        (1, 0), (1, -1), (0, -1), (-1, -1)]
+        self.obs = set()
 
-        return result
+    def add_obstacle(self, obs):
+        self.obs.add(obs)
+
+class DStar:
+    def __init__(self, s_start, s_goal, w, h):
+        self.s_start, self.s_goal = s_start, s_goal
+
+        self.Env = Env(w,h)
+
+        self.u_set = self.Env.motions
+        self.obs = self.Env.obs
+        self.x = self.Env.x_range
+        self.y = self.Env.y_range
+
+        self.OPEN = set()
+        self.t = dict()
+        self.PARENT = dict()
+        self.h = dict()
+        self.k = dict()
+        self.path = []
+        self.visited = set()
+        self.count = 0
+
+    def init(self):
+        for i in range(self.Env.x_range):
+            for j in range(self.Env.y_range):
+                self.t[(i, j)] = 'NEW'
+                self.k[(i, j)] = 0.0
+                self.h[(i, j)] = float("inf")
+                self.PARENT[(i, j)] = None
+
+        self.h[self.s_goal] = 0.0
+
+    def run(self, s_start, s_end):
+        self.init()
+        self.insert(s_end, 0)
+
+        while True:
+            self.process_state()
+            if self.t[s_start] == 'CLOSED':
+                break
+
+        self.path = self.extract_path(s_start, s_end)
+
+    def on_press(self, new_obstacle):
+        x, y = new_obstacle
+        x, y = int(x), int(y)
+        if (x, y) not in self.obs:
+            self.obs.add((x, y))
+
+            s = self.s_start
+            self.visited = set()
+            self.count += 1
+
+            while s != self.s_goal:
+                if self.is_collision(s, self.PARENT[s]):
+                    self.modify(s)
+                    continue
+                s = self.PARENT[s]
+
+            self.path = self.extract_path(self.s_start, self.s_goal)
+
+    def extract_path(self, s_start, s_end):
+        path = [s_start]
+        s = s_start
+        while True:
+            s = self.PARENT[s]
+            path.append(s)
+            if s == s_end:
+                return path
+
+    def process_state(self):
+        s = self.min_state()  # get node in OPEN set with min k value
+        self.visited.add(s)
+
+        if s is None:
+            return -1  # OPEN set is empty
+
+        k_old = self.get_k_min()  # record the min k value of this iteration (min path cost)
+        self.delete(s)  # move state s from OPEN set to CLOSED set
+
+        # k_min < h[s] --> s: RAISE state (increased cost)
+        if k_old < self.h[s]:
+            for s_n in self.get_neighbor(s):
+                if self.h[s_n] <= k_old and \
+                        self.h[s] > self.h[s_n] + self.cost(s_n, s):
+
+                    # update h_value and choose parent
+                    self.PARENT[s] = s_n
+                    self.h[s] = self.h[s_n] + self.cost(s_n, s)
+
+        # s: k_min >= h[s] -- > s: LOWER state (cost reductions)
+        if k_old == self.h[s]:
+            for s_n in self.get_neighbor(s):
+                if self.t[s_n] == 'NEW' or \
+                        (self.PARENT[s_n] == s and self.h[s_n] != self.h[s] + self.cost(s, s_n)) or \
+                        (self.PARENT[s_n] != s and self.h[s_n] > self.h[s] + self.cost(s, s_n)):
+
+                    # Condition:
+                    # 1) t[s_n] == 'NEW': not visited
+                    # 2) s_n's parent: cost reduction
+                    # 3) s_n find a better parent
+                    self.PARENT[s_n] = s
+                    self.insert(s_n, self.h[s] + self.cost(s, s_n))
+        else:
+            for s_n in self.get_neighbor(s):
+                if self.t[s_n] == 'NEW' or \
+                        (self.PARENT[s_n] == s and self.h[s_n] != self.h[s] + self.cost(s, s_n)):
+
+                    # Condition:
+                    # 1) t[s_n] == 'NEW': not visited
+                    # 2) s_n's parent: cost reduction
+                    self.PARENT[s_n] = s
+                    self.insert(s_n, self.h[s] + self.cost(s, s_n))
+                else:
+                    if self.PARENT[s_n] != s and \
+                            self.h[s_n] > self.h[s] + self.cost(s, s_n):
+
+                        # Condition: LOWER happened in OPEN set (s), s should be explored again
+                        self.insert(s, self.h[s])
+                    else:
+                        if self.PARENT[s_n] != s and \
+                                self.h[s] > self.h[s_n] + self.cost(s_n, s) and \
+                                self.t[s_n] == 'CLOSED' and \
+                                self.h[s_n] > k_old:
+
+                            # Condition: LOWER happened in CLOSED set (s_n), s_n should be explored again
+                            self.insert(s_n, self.h[s_n])
+
+        return self.get_k_min()
+
+    def min_state(self):
+        """
+        choose the node with the minimum k value in OPEN set.
+        :return: state
+        """
+
+        if not self.OPEN:
+            return None
+
+        return min(self.OPEN, key=lambda x: self.k[x])
+
+    def get_k_min(self):
+        """
+        calc the min k value for nodes in OPEN set.
+        :return: k value
+        """
+
+        if not self.OPEN:
+            return -1
+
+        return min([self.k[x] for x in self.OPEN])
+
+    def insert(self, s, h_new):
+        """
+        insert node into OPEN set.
+        :param s: node
+        :param h_new: new or better cost to come value
+        """
+
+        if self.t[s] == 'NEW':
+            self.k[s] = h_new
+        elif self.t[s] == 'OPEN':
+            self.k[s] = min(self.k[s], h_new)
+        elif self.t[s] == 'CLOSED':
+            self.k[s] = min(self.h[s], h_new)
+
+        self.h[s] = h_new
+        self.t[s] = 'OPEN'
+        self.OPEN.add(s)
+
+    def delete(self, s):
+        """
+        delete: move state s from OPEN set to CLOSED set.
+        :param s: state should be deleted
+        """
+
+        if self.t[s] == 'OPEN':
+            self.t[s] = 'CLOSED'
+
+        self.OPEN.remove(s)
+
+    def modify(self, s):
+        """
+        start processing from state s.
+        :param s: is a node whose status is RAISE or LOWER.
+        """
+
+        self.modify_cost(s)
+
+        while True:
+            k_min = self.process_state()
+
+            if k_min >= self.h[s]:
+                break
+
+    def modify_cost(self, s):
+        # if node in CLOSED set, put it into OPEN set.
+        # Since cost may be changed between s - s.parent, calc cost(s, s.p) again
+
+        if self.t[s] == 'CLOSED':
+            self.insert(s, self.h[self.PARENT[s]] + self.cost(s, self.PARENT[s]))
+
+    def get_neighbor(self, s):
+        nei_list = set()
+
+        for u in self.u_set:
+            s_next = tuple([s[i] + u[i] for i in range(2)])
+            if s_next not in self.obs:
+                nei_list.add(s_next)
+
+        return nei_list
+
+    def cost(self, s_start, s_goal):
+        """
+        Calculate Cost for this motion
+        :param s_start: starting node
+        :param s_goal: end node
+        :return:  Cost for this motion
+        :note: Cost function could be more complicate!
+        """
+
+        if self.is_collision(s_start, s_goal):
+            return float("inf")
+
+        return np.hypot(s_goal[0] - s_start[0], s_goal[1] - s_start[1])
+
+    def is_collision(self, s_start, s_end):
+        if s_start in self.obs or s_end in self.obs:
+            return True
+
+        if s_start[0] != s_end[0] and s_start[1] != s_end[1]:
+            if s_end[0] - s_start[0] == s_start[1] - s_end[1]:
+                s1 = (min(s_start[0], s_end[0]), min(s_start[1], s_end[1]))
+                s2 = (max(s_start[0], s_end[0]), max(s_start[1], s_end[1]))
+            else:
+                s1 = (min(s_start[0], s_end[0]), max(s_start[1], s_end[1]))
+                s2 = (max(s_start[0], s_end[0]), min(s_start[1], s_end[1]))
+
+            if s1 in self.obs or s2 in self.obs:
+                return True
+
+        return False
+
 
 
 if __name__ == "__main__":
