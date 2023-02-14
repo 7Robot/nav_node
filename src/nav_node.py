@@ -56,7 +56,7 @@ class NavigationNode():
             Trouve le chemin le plus court entre les deux positions
     """
     def __init__(self, avoidance_mode, avoidance_trigger_distance,
-                 emergency_stop_distance, robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file, discretisation = 5):
+                 emergency_stop_distance, robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file, discretisation = 1):
         self.discretisation = discretisation
         self.path_without_obstacles = []
         self.action_orders_pub = action_orders_pub
@@ -66,25 +66,29 @@ class NavigationNode():
         #Map des obstacles fixes
         self.cvmap = self.__init_Cv(cv_obstacle_file)
         self.static_obstacles = []
-        for i in range(self.cvmap.shape[0]//self.discretisation+1):
-            for j in range(self.cvmap.shape[1]//self.discretisation+1):
-                if 255 in self.cvmap[i,j:j+5]:
-                    self.static_obstacles.append((i*self.discretisation, j*self.discretisation))
-
         for i in range(self.cvmap.shape[1]//self.discretisation+1):
-            self.static_obstacles.append((i, 0))
-            self.static_obstacles.append((i, self.cvmap.shape[0]//self.discretisation))
             for j in range(self.cvmap.shape[0]//self.discretisation+1):
+                try:
+                    if 255 in self.cvmap[i*self.discretisation,j*self.discretisation:(j+1)*self.discretisation]:
+                        self.static_obstacles.append((i, j))
+                except IndexError:
+                    rospy.logdebug("IndexError : i : {}, j : {}".format(i, j))
+
+
+        for i in range(self.cvmap.shape[0]//self.discretisation):
+            self.static_obstacles.append((i, 0))
+            self.static_obstacles.append((i, self.cvmap.shape[1]//self.discretisation))
+            for j in range(self.cvmap.shape[1]//self.discretisation):
                 self.static_obstacles.append((0, j))
-                self.static_obstacles.append((self.cvmap.shape[1]//self.discretisation, j))
+                self.static_obstacles.append((self.cvmap.shape[0]//self.discretisation, j))
 
         print("Done init static obstacles")
         np.save("static_obstacles.npy", self.static_obstacles)
 
         self.obstacles = self.static_obstacles
 
-        self.x_range = self.cvmap.shape[1]//self.discretisation+1
-        self.y_range = self.cvmap.shape[0]//self.discretisation+1
+        self.x_range = self.cvmap.shape[1]//self.discretisation
+        self.y_range = self.cvmap.shape[0]//self.discretisation
 
         print("x_range : ", self.x_range)
         print("y_range : ", self.y_range)
