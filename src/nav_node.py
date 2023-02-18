@@ -78,16 +78,18 @@ class NavigationNode():
 
         for i in range(-1,self.cvmap.shape[0]//self.discretisation+1):
             self.static_obstacles.append((-1, i))
-            self.static_obstacles.append((self.cvmap.shape[1]//self.discretisation+1, i))
+            self.static_obstacles.append((self.cvmap.shape[1]//self.discretisation, i))
         
         for j in range(-1,self.cvmap.shape[1]//self.discretisation+1):
             self.static_obstacles.append((j, -1))
-            self.static_obstacles.append((j,self.cvmap.shape[0]//self.discretisation+1))
+            self.static_obstacles.append((j,self.cvmap.shape[0]//self.discretisation))
 
         print("Done init static obstacles")
         np.save("static_obstacles.npy", self.static_obstacles)
 
         self.obstacles = self.static_obstacles
+
+        self.dynamic_obstacles = []
 
         self.x_range = self.cvmap.shape[1]//self.discretisation+1
         self.y_range = self.cvmap.shape[0]//self.discretisation+1
@@ -106,6 +108,7 @@ class NavigationNode():
         self.u_set = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)]
 
         self.log = []
+        self.path = None
 
         self.real_path = []
 
@@ -148,7 +151,7 @@ class NavigationNode():
         """
         if self.position_goal in self.obstacles:
             return None
-        self.init_dstar(start_pos, end_pos)
+        self.init_dstar()
         self.insert_dstar(self.position_goal, 0.0)
         i=0
         while True:
@@ -159,15 +162,15 @@ class NavigationNode():
             if self.t[start_pos] == 'CLOSED':
                 break
         
-        self.path_without_obstacles = self.reconstruct_path(start_pos, end_pos)
-
+        self.path_without_obstacles = self.rebuild_path(start_pos, end_pos)
+        self.path = self.path_without_obstacles
 
         print("Found path in ", i, " iterations")
         return self.path_without_obstacles
         
         
     # Dstar related methods
-    def init_dstar(self, start_pos, end_pos):
+    def init_dstar(self):
         for i in range(self.x_range):
             for j in range(self.y_range):
                 self.t[(i, j)] = 'NEW'
@@ -177,26 +180,8 @@ class NavigationNode():
 
         self.h[self.position_goal] = 0.0
         self.visited = set()
-        
-    def insert_dstar(self, s, h_new):
-        """
-        insert node into OPEN set.
-        :param s: node
-        :param h_new: new or better cost to come value
-        """
-
-        if self.t[s] == 'NEW':
-            self.k[s] = h_new
-        elif self.t[s] == 'OPEN':
-            self.k[s] = min(self.k[s], h_new)
-        elif self.t[s] == 'CLOSED':
-            self.k[s] = min(self.h[s], h_new)
-
-        self.h[s] = h_new
-        self.t[s] = 'OPEN'
-        self.OPEN.add(s)
-
-    def reconstruct_path(self, s_start, s_end):
+   
+    def rebuild_path(self, s_start, s_end):
         """
         Find the path from s_start to s_end
         :param s_start: start node
@@ -245,7 +230,7 @@ class NavigationNode():
                     # 2) s_n's parent: cost reduction
                     # 3) s_n find a better parent
                     self.PARENT[s_n] = s
-                    self.insert(s_n, self.h[s] + self.cost(s, s_n))
+                    self.insert_dstar(s_n, self.h[s] + self.cost(s, s_n))
         else:
             for s_n in self.get_neighbor(s):
                 if self.t[s_n] == 'NEW' or \
@@ -255,13 +240,13 @@ class NavigationNode():
                     # 1) t[s_n] == 'NEW': not visited
                     # 2) s_n's parent: cost reduction
                     self.PARENT[s_n] = s
-                    self.insert(s_n, self.h[s] + self.cost(s, s_n))
+                    self.insert_dstar(s_n, self.h[s] + self.cost(s, s_n))
                 else:
                     if self.PARENT[s_n] != s and \
                             self.h[s_n] > self.h[s] + self.cost(s, s_n):
 
                         # Condition: LOWER happened in OPEN set (s), s should be explored again
-                        self.insert(s, self.h[s])
+                        self.insert_dstar(s, self.h[s])
                     else:
                         if self.PARENT[s_n] != s and \
                                 self.h[s] > self.h[s_n] + self.cost(s_n, s) and \
@@ -269,7 +254,7 @@ class NavigationNode():
                                 self.h[s_n] > k_old:
 
                             # Condition: LOWER happened in CLOSED set (s_n), s_n should be explored again
-                            self.insert(s_n, self.h[s_n])
+                            self.insert_dstar(s_n, self.h[s_n])
 
         return self.get_k_min()
 
@@ -316,7 +301,7 @@ class NavigationNode():
 
         return min(self.OPEN, key=lambda x: self.k[x])
 
-    def insert(self, s, h_new):
+    def insert_dstar(self, s, h_new):
         """
         insert node into OPEN set.
         :param s: node
@@ -347,6 +332,7 @@ class NavigationNode():
             return float("inf")
 
         return np.hypot(s_goal[0] - s_start[0], s_goal[1] - s_start[1])
+    
     def is_collision(self, s_start, s_end):
         if s_start in self.obstacles or s_end in self.obstacles:
             return True
@@ -364,6 +350,10 @@ class NavigationNode():
 
         return False
     
+    def adapt_path(self, new_obstacles):
+        pass
+
+
     # Callbacks
 
     def position_goal_callback(self, msg):
@@ -379,9 +369,10 @@ class NavigationNode():
             pos = (self.robot_data.position.x*100//self.discretisation, self.robot_data.position.y*100//self.discretisation)
             print("Position goal: " + str(self.position_goal))
             print("Position robot: " + str(pos))
-            self.init_dstar(pos, self.position_goal)
+            self.init_dstar()
+            t = time.time()
             path = self.find_path_without_obstacles(pos, self.position_goal)
-
+            print("Path found in " + str(time.time() - t) + "s")
             if path != None:
                 rospy.loginfo('Path found: ' + str(path))
                 self.publish_pic_msg(path)
@@ -411,26 +402,67 @@ class NavigationNode():
             action_client_goal.command = msg.action_msg
             action_client.send_goal(action_client_goal)
         
-
     def robot_data_callback(self, msg):
         self.robot_data = msg
 
     def obstacles_callback(self, msg):
         """
         Callback pour récupérer les obstacles
+
+        converted_obstacles est une liste de la forme [x,y,radius,[liste de points...]]
         """
+
 
         converted_obstacles = [] #Liste de tuples (x,y,radius)
 
+        tmp = [(obstacle.center.x, obstacle.center.y, obstacle.radius) for obstacle in msg.circles]
+
         # Convert data to a list of tuples
-        for obstacle in msg.circles:
-            converted_obstacles.append((obstacle.center.x, obstacle.center.y, obstacle.radius))
+        for circ in tmp:
+            converted_obstacles+=[[circ[0], circ[1], circ[2], []]]
+            for i in range(0, 360):
+                converted_obstacles[-1][3] +=  [[int(circ[0]*100 + circ[2]*np.cos(i*np.pi/180)*100)//self.discretisation, int(circ[1]*100 + circ[2]*np.sin(i*np.pi/180)*100)//self.discretisation]]
         
-        # Convert data to a list of tuples
-        for obstacle in converted_obstacles:
-            if obstacle not in self.obstacles:
-                # Obstacles have changed
-                self.obstacles_bis = converted_obstacles
+        #Find new obstacles
+
+        new_obstacles = [converted_obstacles[k] for k in range(len(converted_obstacles))]
+        for obs in converted_obstacles:
+            for p in self.dynamic_obstacles:
+                if obs[0]==p[0] and obs[1]==p[1] and obs[2]==p[2]:
+                    # There is a new obstacle
+                    new_obstacles.remove(p)
+        
+        if new_obstacles != []:
+            # There are new obstacles
+            self.dynamic_obstacles = converted_obstacles
+            self.obstacles = self.static_obstacles + self.dynamic_obstacles
+            print("There is new obstacles")
+            
+            # Adapt path
+
+
+
+        # Is there any relevant removed obstacles ?
+        for obs in self.dynamic_obstacles:
+            removed = True
+            for p in converted_obstacles:
+                if obs[0]==p[0] and obs[1]==p[1] and obs[2]==p[2]:
+                    removed = False
+            if removed:
+                # There is a removed obstacle
+                print("There is removed obstacles")
+                self.dynamic_obstacles = converted_obstacles
+                self.obstacles = self.static_obstacles + self.dynamic_obstacles
+                
+                self.find_path_without_obstacles((self.robot_data.position.x*100//self.discretisation, self.robot_data.position.y*100//self.discretisation), self.position_goal)
+                break
+
+
+        
+        if self.path != None:
+            print("Callback")
+            self.update_obstacles()
+        
     
     def next_point_callback(self, msg):
         self.next_point = msg
@@ -481,4 +513,3 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
 
         rospy.sleep(0.05)
-            
