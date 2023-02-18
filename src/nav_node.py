@@ -56,7 +56,7 @@ class NavigationNode():
             Trouve le chemin le plus court entre les deux positions
     """
     def __init__(self, avoidance_mode, avoidance_trigger_distance,
-                 emergency_stop_distance, robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file, discretisation = 5):
+                 emergency_stop_distance, robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file, discretisation = 10):
         self.discretisation = discretisation
         self.path_without_obstacles = []
         self.action_orders_pub = action_orders_pub
@@ -87,7 +87,7 @@ class NavigationNode():
         print("Done init static obstacles")
         np.save("static_obstacles.npy", self.static_obstacles)
 
-        self.obstacles = self.static_obstacles
+        #self.obstacles = self.static_obstacles
 
         self.dynamic_obstacles = []
 
@@ -111,6 +111,7 @@ class NavigationNode():
         self.path = None
 
         self.real_path = []
+
 
 
 
@@ -157,7 +158,8 @@ class NavigationNode():
         while True:
             result = self.process_state()
             if result == -1:
-                raise Exception("No path found")
+                rospy.logwarn("No path found")
+                return None
             i+=1            
             if self.t[start_pos] == 'CLOSED':
                 break
@@ -167,7 +169,6 @@ class NavigationNode():
 
         print("Found path in ", i, " iterations")
         return self.path_without_obstacles
-        
         
     # Dstar related methods
     def init_dstar(self):
@@ -188,7 +189,6 @@ class NavigationNode():
         :param s_end: end node
         :return: list of nodes
         """
-
         path = [s_start]
         s = s_start
         while True:
@@ -286,7 +286,7 @@ class NavigationNode():
             s_next = tuple([s[i] + u[i] for i in range(2)])
             if s_next not in self.obstacles:
                 nei_list.add(s_next)
-                print("From "+str(s)+", "+str(s_next))
+                print("From "+str(s)+", "+str(s_next)+" not in "+str(len(self.obstacles))+" obstacles.")
 
         return nei_list
 
@@ -307,17 +307,19 @@ class NavigationNode():
         :param s: node
         :param h_new: new or better cost to come value
         """
+        try:
+            if self.t[s] == 'NEW':
+                self.k[s] = h_new
+            elif self.t[s] == 'OPEN':
+                self.k[s] = min(self.k[s], h_new)
+            elif self.t[s] == 'CLOSED':
+                self.k[s] = min(self.h[s], h_new)
 
-        if self.t[s] == 'NEW':
-            self.k[s] = h_new
-        elif self.t[s] == 'OPEN':
-            self.k[s] = min(self.k[s], h_new)
-        elif self.t[s] == 'CLOSED':
-            self.k[s] = min(self.h[s], h_new)
-
-        self.h[s] = h_new
-        self.t[s] = 'OPEN'
-        self.OPEN.add(s)
+            self.h[s] = h_new
+            self.t[s] = 'OPEN'
+            self.OPEN.add(s)
+        except KeyError:
+            rospy.logwarn("Obstacle out of the map!")
 
     def cost(self, s_start, s_goal):
         """
@@ -351,7 +353,23 @@ class NavigationNode():
         return False
     
     def adapt_path(self, new_obstacles):
-        pass
+        #  Check if there is an obstacle in the path
+        for e in new_obstacles:
+            if e in self.path:
+                # Obstacle in the path
+                for neighbour in self.get_neighbor(e):
+                    self.t[e] = 'OPEN'
+                    self.OPEN.add(e)
+        # Recompute path
+        bool_path = True
+
+        while bool_path:
+            result = self.process_state()
+            if result == -1:
+                print("ljqsfgmljSNJ")
+                return None
+            self.rebuild_path()
+
 
 
     # Callbacks
@@ -412,7 +430,7 @@ class NavigationNode():
         converted_obstacles est une liste de la forme [x,y,radius,[liste de points...]]
         """
 
-
+        old_dyn_obs = [self.dynamic_obstacles[k] for k in range(len(self.dynamic_obstacles))]
         converted_obstacles = [] #Liste de tuples (x,y,radius)
 
         tmp = [(obstacle.center.x, obstacle.center.y, obstacle.radius) for obstacle in msg.circles]
@@ -421,7 +439,8 @@ class NavigationNode():
         for circ in tmp:
             converted_obstacles+=[[circ[0], circ[1], circ[2], []]]
             for i in range(0, 360):
-                converted_obstacles[-1][3] +=  [[int(circ[0]*100 + circ[2]*np.cos(i*np.pi/180)*100)//self.discretisation, int(circ[1]*100 + circ[2]*np.sin(i*np.pi/180)*100)//self.discretisation]]
+                converted_obstacles[-1][3] +=  [(int(circ[0]*100 + circ[2]*np.cos(i*np.pi/180)*100)//self.discretisation, int(circ[1]*100 + circ[2]*np.sin(i*np.pi/180)*100)//self.discretisation)]
+                converted_obstacles[-1][3] +=  [(int(circ[0]*100 + (circ[2]-self.discretisation/100)*np.cos(i*np.pi/180)*100)//self.discretisation, int(circ[1]*100 + (circ[2]-self.discretisation/100)*np.sin(i*np.pi/180)*100)//self.discretisation)]
         
         #Find new obstacles
 
@@ -434,34 +453,52 @@ class NavigationNode():
         
         if new_obstacles != []:
             # There are new obstacles
-            self.dynamic_obstacles = converted_obstacles
+            # Remove duplicate
+            dyn_without_duplicate = []
+            for obs in new_obstacles:
+                for e in obs[3]:
+                    b = True
+                    for f in dyn_without_duplicate:
+                        if e[0] == f[0] and e[1] == f[1]:
+                            b = False
+                            break
+                    if b:
+                        dyn_without_duplicate += [e]
+            self.dynamic_obstacles = dyn_without_duplicate
             self.obstacles = self.static_obstacles + self.dynamic_obstacles
             print("There is new obstacles")
-            
             # Adapt path
-
+            
 
 
         # Is there any relevant removed obstacles ?
-        for obs in self.dynamic_obstacles:
+        for obs in old_dyn_obs:
             removed = True
             for p in converted_obstacles:
                 if obs[0]==p[0] and obs[1]==p[1] and obs[2]==p[2]:
                     removed = False
             if removed:
+                dyn_without_duplicate = []
+                for obs in new_obstacles:
+                    for e in obs[3]:
+                        b = True
+                        for f in dyn_without_duplicate:
+                            if e[0] == f[0] and e[1] == f[1]:
+                                b = False
+                                break
+                        if b:
+                            dyn_without_duplicate += [tuple(e)]
+                self.dynamic_obstacles = converted_obstacles
+                self.obstacles = self.static_obstacles + sum([self.dynamic_obstacles[k][3] for k in range(len(self.dynamic_obstacles))], [])
                 # There is a removed obstacle
                 print("There is removed obstacles")
-                self.dynamic_obstacles = converted_obstacles
-                self.obstacles = self.static_obstacles + self.dynamic_obstacles
+                np.save("log.npy", self.obstacles)
                 
                 self.find_path_without_obstacles((self.robot_data.position.x*100//self.discretisation, self.robot_data.position.y*100//self.discretisation), self.position_goal)
                 break
 
 
-        
-        if self.path != None:
-            print("Callback")
-            self.update_obstacles()
+
         
     
     def next_point_callback(self, msg):
