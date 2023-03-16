@@ -30,11 +30,9 @@ class PathCircle():
 
         self.start = []
         self.end = []
-        self.sens = []
-    
-    
+        self.sens = []    
 
-    def add_circle(self, x_c, y_c, R, start, end, path_portion):
+    def add_circle(self, x_c, y_c, R, start, end, sens, path_portion):
         self.x_c.insert(path_portion,x_c)
         self.y_c.insert(path_portion,y_c)
         self.R.insert(path_portion,R)
@@ -69,7 +67,7 @@ class PathCircle():
 
 
 class NavigationNode():
-    def __init__(self):
+    def __init__(self, distance_interpoint):
         # Initialize the node
         rospy.init_node('navigation_node', anonymous=True)
 
@@ -79,6 +77,8 @@ class NavigationNode():
         # Initialize the path
         self.path = PathCircle()
         self.path_portion = 0
+        self.next_goal = []
+        self.distance_interpoint = distance_interpoint
 
         # Initialize static obstacles
         self.static_obstacles = np.load("cvmap.npy")
@@ -143,7 +143,7 @@ class NavigationNode():
         Vérifie si le point (x, y) touche un obstacle
         """
         (xf,yf) = (int(x*100), int(y*100))
-        return (xf, yf) in self.obstacles
+        return self.map_obstacles[xf, yf] == 1
 
     def calc_circle(self, start, goal, dodge_point):
         """
@@ -168,13 +168,22 @@ class NavigationNode():
         yc = -b
         R = np.sqrt(xc**2 + yc**2 - c)
 
-        return (xc, yc, R)
+        # Find the sens
+        psi = np.angle(start[0] + 1j*start[1] - (xc + 1j*yc))
+        eps = 0.174533 # 10° en radians
+        sens = np.hypot(goal[0] - start[0], goal[1] - start[1]) > np.hypot(goal[0] - xc + R*np.cos(psi), goal[1] - yc + R*np.sin(psi))
+
+        return (xc, yc, R, sens)
 
     def circumvent(self, path_portion, x, y):
+        """
+        Crée un arc de cercle entre la position et la fin de la portion de chemin
+        """
+
         # Find the normal
         if self.path.is_circle:
             # The path is a circle
-            (x0,y0) = self.path.start[path_portion]
+            (x0,y0) = self.robot_data.position
             (x1,y1) = self.path.end[path_portion]
             (a,b) = ((y1-y0)/(x1-x0), y0 - x0*(y1-y0)/(x1-x0))
         else:
@@ -201,7 +210,7 @@ class NavigationNode():
             x_middle += u[0] * 0.01
             y_middle += u[1] * 0.01
         
-        # Find the circle
+        # Find and create the circle
         (xc, yc, R) = self.calc_circle((x,y), (x_end, y_end), (x_middle, y_middle))
         self.add_circle(xc, yc, R, (x,y), (x_end, y_end), path_portion)
 
@@ -213,7 +222,7 @@ class NavigationNode():
         path = self.path
 
         # On vérifie si on est arrivé à la fin d'une portion de chemin
-        if np.sqrt((pos[0]-path.end[self.path_portion][0])**2 + (pos[1]-path.end[self.path_portion][1])**2) < 0.001:
+        if (pos[0]-path.end[self.path_portion][0])**2 + (pos[1]-path.end[self.path_portion][1])**2 < self.distance_interpoint**2:
             self.path_portion += 1
             print("Portion suivante")
 
@@ -222,15 +231,17 @@ class NavigationNode():
             #DEBUG
             print(path.x_c[self.path_portion], path.y_c[self.path_portion], path.R[self.path_portion])
             angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
-            angle += path.sfb(path.sens[self.path_portion])*0.01
+            angle += path.sfb(path.sens[self.path_portion])*np.arccos(2-self.distance_interpoint**2/path.R[self.path_portion]**2)
             pos[0] = path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle)
             pos[1] = path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle)
         else:
-                pos[0] += path.sfb(path.sens[self.path_portion])*0.01
+                pos[0] += path.sfb(path.sens[self.path_portion])*self.distance_interpoint/np.sqrt(1+path.a[self.path_portion]**2)
                 pos[1] = pos[0]*path.a[self.path_portion] + path.b[self.path_portion]
         rospy.log("Consigne : ", (pos[0],pos[1]))
 
         # On publie la consigne
+
+        self.publish_pic_msg((pos[0],pos[1]))
 
     # Callbacks
 
@@ -241,7 +252,7 @@ class NavigationNode():
         print("Position goal : " + str(msg))
         self.position_goal = [msg.x, msg.y]
         
-    def publish_pic_msg(self, path):
+    def publish_pic_msg(self, next_goal):
         """
         Publie un message ordonnant au robot de suivre le chemin "path"
 
@@ -252,10 +263,8 @@ class NavigationNode():
         """
         msg = Pic_Action()
         msg.action_destination = 'motor'
-        msg.action_msg = 'CHAINEDMOVE'
-        for node in path[1:-1]:
-            msg.action_msg += ' ' + str(node[0]*self.discretisation/100) + ' ' + str(node[1]*self.discretisation/100)
-        msg.action_msg += ' ' + str(self.position_goal[0]*self.discretisation/100) + ' ' + str(self.position_goal[1]*self.discretisation/100)
+        msg.action_msg = 'MOVE'
+        msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
         self.action_orders_pub.publish(msg)
 
         if debug_mode:
@@ -270,8 +279,6 @@ class NavigationNode():
     def obstacles_callback(self, msg):
         """
         Callback pour récupérer les obstacles
-
-        converted_obstacles est une liste de la forme [x,y,radius,[liste de points...]]
         """
 
                   
@@ -291,7 +298,7 @@ if __name__ == '__main__':
     graph_file = rospy.get_param('~graph_file', 'default')
     cv_obstacle_file = rospy.get_param('~cv_obstacle_file', 'default')
     debug_mode = rospy.get_param('~debug_mode', False)
-    avoidance_mode = rospy.get_param('~avoidance_mode', 'default')
+    distance_interpoint = rospy.get_param('~distance_interpoint', '15')
     avoidance_trigger_distance = rospy.get_param('~avoidance_trigger_distance', 0.3) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_x/Odom')
@@ -305,8 +312,7 @@ if __name__ == '__main__':
         action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
 
     # Création de la classe NavigationNode
-    Nav_node = NavigationNode(avoidance_mode, avoidance_trigger_distance, emergency_stop_distance,
-                              robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file)
+    Nav_node = NavigationNode(distance_interpoint)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
