@@ -9,368 +9,228 @@ import time
 import cv2
 import actionlib
 
-import matplotlib.pyplot as plt
+class PathCircle():
+    """
+    Classe définissant un chemin comme arc de cercle
+
+    x²+y²+2ax+2by+c=0
+
+    Le robot utilise x_c, y_c et R/ a et b entre start[0] et end[0] et parcours la courbe dans le sens sens[0] (False sens horaire/ x décroissants, True sens trigo/x croissants)
+    is_circle[0] est True si le chemin est un cercle, False si c'est une affine
+    """
+    def __init__(self):
+        self.x_c = []
+        self.y_c = []
+        self.R = []
+
+        self.a = []
+        self.b = []
+
+        self.is_circle = []
+
+        self.start = []
+        self.end = []
+        self.sens = []
+    
+    
+
+    def add_circle(self, x_c, y_c, R, start, end, path_portion):
+        self.x_c.insert(path_portion,x_c)
+        self.y_c.insert(path_portion,y_c)
+        self.R.insert(path_portion,R)
+        self.is_circle.insert(path_portion,True)
+        self.start.insert(path_portion,start)
+        self.end[path_portion-1] = start
+        self.end.insert(path_portion,end)
+
+        # On vérifie si en allant dans le sens trigo on se rapproche de la cible
+        psi = np.angle(start[0] + 1j*start[1] - (x_c + 1j*y_c))
+        eps = 0.174533 # 10° en radians
+        self.sens.insert(path_portion,np.hypot(end[0] - start[0], end[1] - start[1]) > np.hypot(end[0] - x_c + R*np.cos(psi), end[1] - y_c + R*np.sin(psi)))
+
+        self.a.insert(path_portion,0)
+        self.b.insert(path_portion,0)
+
+    def add_affine(self, start, end, path_portion):
+        self.start.insert(path_portion,start)
+        self.end[path_portion-1] = start
+        self.end.insert(path_portion,end)
+
+        self.is_circle.insert(path_portion,False)
+        self.a.insert(path_portion,(end[1]-start[1])/(end[0]-start[0]))
+        self.b.insert(path_portion,start[1] - start[0]*(end[1]-start[1])/(end[0]-start[0]))
+
+        self.x_c.insert(path_portion,0)
+        self.y_c.insert(path_portion,0)
+        self.R.insert(path_portion,0)
+        self.sens.insert(path_portion,end[0]>start[0])
+        
+
+
 
 class NavigationNode():
-    """
-    Node permettant de gérer la navigation du robot, par évitement d'obstacles
+    def __init__(self):
+        # Initialize the node
+        rospy.init_node('navigation_node', anonymous=True)
 
-    Attributs
-    ---------
-        - graph : networkx.Graph\n
-            Graphe contenant les noeuds
-        - robot_data : RobotData\n
-            Dernier message reçu par le topic "robot_data"
-        - position_goal : Point\n
-            Dernier message reçu par le topic "position_goal"
-        - obstacles : Obstacles\n
-            Dernier message reçu par le topic "obstacles"
-        - action_orders_pub : rospy.Publisher\n
-            Publisher pour envoyer les ordres d'action au robot
-        - cv_map : np.array\n
-            Image de la carte de l'environnement
-        - avoidance_mode : str\n
-            Mode d'évitement des obstacles
-        - avoidance_trigger_distance : float\n
-            Distance à partir de laquelle l'évitement se déclenche
-        - emergency_stop_distance : float\n
-            Distance à partir de laquelle l'évitement d'urgence se déclenche
-        - robot_x_dimension : float\n
-            Dimension en x du robot
-        - robot_y_dimension : float\n
-            Dimension en y du robot
-    
-    Méthodes
-    --------
-        - find_closest_node(start_pos, graph, exclude=[])\n
-            Trouve le noeud le plus proche de la position "start_pos"
-        - robot_data_callback(msg)\n
-            Callback pour récupérer les données du robot
-        - obstacles_callback(msg)\n
-            Callback pour récupérer les obstacles
-        - position_goal_callback(msg)\n
-            Callback pour récupérer la position cible
-        - verify_obstacles(start_pos, end_pos, exclude=None)\n
-            Vérifie si les obstacles entrent en collision avec le robot
-        - find_path(start_pos, end_pos, exclude=None)\n
-            Trouve le chemin le plus court entre les deux positions
-    """
-    def __init__(self, avoidance_mode, avoidance_trigger_distance,
-                 emergency_stop_distance, robot_x_dimension, robot_y_dimension, graph_file, action_orders_pub, cv_obstacle_file, discretisation = 10):
-        self.discretisation = discretisation
-        self.path_without_obstacles = []
-        self.action_orders_pub = action_orders_pub
-        self.next_point = Point()
+        # Initialize the robot data
+        self.robot_data = RobotData()
 
+        # Initialize the path
+        self.path = PathCircle()
+        self.path_portion = 0
 
-        #Map des obstacles fixes
-        self.cvmap = self.__init_Cv(cv_obstacle_file)
-        self.static_obstacles = []
+        # Initialize static obstacles
+        self.static_obstacles = np.load("cvmap.npy")
+        self.map_obstacles = self.static_obstacles.copy()
 
-        for i in range(self.cvmap.shape[0]//self.discretisation):
-            for j in range(self.cvmap.shape[1]//self.discretisation):
-                for ip in range(self.discretisation):
-                    for jp in range(self.discretisation):
-                        if self.cvmap[i*self.discretisation+ip][j*self.discretisation+jp] == 255:
-                            if (i, j) not in self.static_obstacles:
-                                self.static_obstacles.append((j, i))
-                                break
-
-        for i in range(-1,self.cvmap.shape[0]//self.discretisation+1):
-            self.static_obstacles.append((-1, i))
-            self.static_obstacles.append((self.cvmap.shape[1]//self.discretisation, i))
         
-        for j in range(-1,self.cvmap.shape[1]//self.discretisation+1):
-            self.static_obstacles.append((j, -1))
-            self.static_obstacles.append((j,self.cvmap.shape[0]//self.discretisation))
 
-        print("Done init static obstacles")
-        np.save("static_obstacles.npy", self.static_obstacles)
-
-        #self.obstacles = self.static_obstacles
-
-        self.dynamic_obstacles = []
-
-        self.x_range = self.cvmap.shape[1]//self.discretisation+1
-        self.y_range = self.cvmap.shape[0]//self.discretisation+1
-
-        print("x_range : ", self.x_range)
-        print("y_range : ", self.y_range)
-
-        #Dstar
-        self.OPEN = set()
-        self.t = dict()
-        self.PARENT = dict()
-        self.h = dict()
-        self.k = dict()
-        self.position_goal = None
-        self.visited = set()
-        self.u_set = [(-1, 0), (-1, 1), (0, 1), (1, 1), (1, 0), (1, -1), (0, -1), (-1, -1)]
-
-        self.log = []
-        self.path = None
-
-        self.real_path = []
-
-
-
-
-    def __init_Cv(self, filename):
+    def find_path_without_obstacles(self, start, goal):
         """
-        Initialise la carte de l'environnement (Private method)
+        Trouve un chemin entre deux points sans obstacles
+
+        Paramètres
+        ----------
+            - start : tuple\n
+                Position de départ du robot
+            - goal : tuple\n
+                Position cible du robot
+
+        Retourne
+        ----------
+            - path : PathCubic\n
+                Chemin cubique définit plus haut
         """
-        MAP_PRECISION = 1  # cm/pixel
-        # le rayon du robot (celui est assimilé a un cercle pour les collisions )
-        ROBOT_RADIUS = 15  # cm
-        # distance a partir de laquelle l'évitement se déclenche
-        # cette valeur n'est utilisée que pour savoir à quel moment il faut désactiver l'évitement
-        DIST_EVITEMENT = 30  # cm
         
-        img = cv2.imread(filename)
+        self.path.start += [start]
+        self.path.end = [goal]
 
-        self.map_width = img.shape[1]/MAP_PRECISION
-        self.map_height = img.shape[0]/MAP_PRECISION
-
-        maps = {
-            "hard_obstacle_map": {"data": img[:, :, 0], "dilate": ROBOT_RADIUS},
-            "item_obstacle_map": {"data": img[:, :, 2], "dilate": ROBOT_RADIUS},
-            "disable_evitement_map": {"data": img[:, :, 0], "dilate": DIST_EVITEMENT}
-        }
+        # Calcul des coefficients de la courbe cubique, on envisage d'abord une courbe affine
+        (x0, y0) = start
+        (x1, y1) = goal
         
-        for m in maps.values():
-            if m["dilate"] is not None:
-                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,
-                                                (int(m["dilate"] / MAP_PRECISION), int(m["dilate"] / MAP_PRECISION)))
-                m["data"] = cv2.dilate(m["data"], kernel, iterations=1)
-        
-        return maps["hard_obstacle_map"]["data"]
+        self.path.a += [(y1-y0)/(x1-x0)]
+        self.path.b += [y0 - x0*(y1-y0)/(x1-x0)]
 
-    def find_path_without_obstacles(self, start_pos, end_pos):
+        # On vérifie si la courbe est bien croissante ou décroissante
+        self.sens += [x1 > x0]
+
+
+    def correct_path(self, path):
         """
-        Trouve le chemin le plus court entre les deux positions
-        sans prendre en compte les collisions avec les obstacles
-        """
-        if self.position_goal in self.obstacles:
-            return None
-        self.init_dstar()
-        self.insert_dstar(self.position_goal, 0.0)
-        i=0
-        while True:
-            result = self.process_state()
-            if result == -1:
-                rospy.logwarn("No path found")
-                return None
-            i+=1            
-            if self.t[start_pos] == 'CLOSED':
-                break
-        
-        self.path_without_obstacles = self.rebuild_path(start_pos, end_pos)
-        self.path = self.path_without_obstacles
-
-        print("Found path in ", i, " iterations")
-        return self.path_without_obstacles
-        
-    # Dstar related methods
-    def init_dstar(self):
-        for i in range(self.x_range):
-            for j in range(self.y_range):
-                self.t[(i, j)] = 'NEW'
-                self.k[(i, j)] = 0.0
-                self.h[(i, j)] = float("inf")
-                self.PARENT[(i, j)] = None
-
-        self.h[self.position_goal] = 0.0
-        self.visited = set()
-   
-    def rebuild_path(self, s_start, s_end):
-        """
-        Find the path from s_start to s_end
-        :param s_start: start node
-        :param s_end: end node
-        :return: list of nodes
-        """
-        path = [s_start]
-        s = s_start
-        while True:
-            s = self.PARENT[s]
-            path.append(s)
-            if s == s_end:
-                return path
-
-    def process_state(self):
-        s = self.min_state()  # get node in OPEN set with min k value
-        self.log += [s]
-        self.visited.add(s)
-
-        if s is None:
-            return -1  # OPEN set is empty
-
-        k_old = self.get_k_min()  # record the min k value of this iteration (min path cost)
-        self.delete(s)  # move state s from OPEN set to CLOSED set
-
-        # k_min < h[s] --> s: RAISE state (increased cost)
-        if k_old < self.h[s]:
-            for s_n in self.get_neighbor(s):
-                if self.h[s_n] <= k_old and \
-                        self.h[s] > self.h[s_n] + self.cost(s_n, s):
-
-                    # update h_value and choose parent
-                    self.PARENT[s] = s_n
-                    self.h[s] = self.h[s_n] + self.cost(s_n, s)
-
-        # s: k_min >= h[s] -- > s: LOWER state (cost reductions)
-        if k_old == self.h[s]:
-            for s_n in self.get_neighbor(s):
-                if self.t[s_n] == 'NEW' or \
-                        (self.PARENT[s_n] == s and self.h[s_n] != self.h[s] + self.cost(s, s_n)) or \
-                        (self.PARENT[s_n] != s and self.h[s_n] > self.h[s] + self.cost(s, s_n)):
-
-                    # Condition:
-                    # 1) t[s_n] == 'NEW': not visited
-                    # 2) s_n's parent: cost reduction
-                    # 3) s_n find a better parent
-                    self.PARENT[s_n] = s
-                    self.insert_dstar(s_n, self.h[s] + self.cost(s, s_n))
-        else:
-            for s_n in self.get_neighbor(s):
-                if self.t[s_n] == 'NEW' or \
-                        (self.PARENT[s_n] == s and self.h[s_n] != self.h[s] + self.cost(s, s_n)):
-
-                    # Condition:
-                    # 1) t[s_n] == 'NEW': not visited
-                    # 2) s_n's parent: cost reduction
-                    self.PARENT[s_n] = s
-                    self.insert_dstar(s_n, self.h[s] + self.cost(s, s_n))
-                else:
-                    if self.PARENT[s_n] != s and \
-                            self.h[s_n] > self.h[s] + self.cost(s, s_n):
-
-                        # Condition: LOWER happened in OPEN set (s), s should be explored again
-                        self.insert_dstar(s, self.h[s])
-                    else:
-                        if self.PARENT[s_n] != s and \
-                                self.h[s] > self.h[s_n] + self.cost(s_n, s) and \
-                                self.t[s_n] == 'CLOSED' and \
-                                self.h[s_n] > k_old:
-
-                            # Condition: LOWER happened in CLOSED set (s_n), s_n should be explored again
-                            self.insert_dstar(s_n, self.h[s_n])
-
-        return self.get_k_min()
-
-    def delete(self, s):
-        """
-        delete: move state s from OPEN set to CLOSED set.
-        :param s: state should be deleted
-        """
-        if self.t[s] == 'OPEN':
-            self.t[s] = 'CLOSED'
-
-        self.OPEN.remove(s)
-
-    def get_k_min(self):
-        """
-        calc the min k value for nodes in OPEN set.
-        :return: k value
+        Corrige le chemin pour éviter les obstacles
         """
 
-        if not self.OPEN:
-            return -1
-
-        return min([self.h[x] for x in self.OPEN])
-    
-    def get_neighbor(self, s):
-        nei_list = set()
-
-        for u in self.u_set:
-            s_next = tuple([s[i] + u[i] for i in range(2)])
-            if s_next not in self.obstacles:
-                nei_list.add(s_next)
-                print("From "+str(s)+", "+str(s_next)+" not in "+str(len(self.obstacles))+" obstacles.")
-
-        return nei_list
-
-    def min_state(self):
-        """
-        choose the node with the minimum k value in OPEN set.
-        :return: state
-        """
-
-        if not self.OPEN:
-            return None
-
-        return min(self.OPEN, key=lambda x: self.k[x])
-
-    def insert_dstar(self, s, h_new):
-        """
-        insert node into OPEN set.
-        :param s: node
-        :param h_new: new or better cost to come value
-        """
-        try:
-            if self.t[s] == 'NEW':
-                self.k[s] = h_new
-            elif self.t[s] == 'OPEN':
-                self.k[s] = min(self.k[s], h_new)
-            elif self.t[s] == 'CLOSED':
-                self.k[s] = min(self.h[s], h_new)
-
-            self.h[s] = h_new
-            self.t[s] = 'OPEN'
-            self.OPEN.add(s)
-        except KeyError:
-            rospy.logwarn("Obstacle out of the map!")
-
-    def cost(self, s_start, s_goal):
-        """
-        Calculate Cost for this motion
-        :param s_start: starting node
-        :param s_goal: end node
-        :return:  Cost for this motion
-        :note: Cost function could be more complicate!
-        """
-
-        if self.is_collision(s_start, s_goal):
-            return float("inf")
-
-        return np.hypot(s_goal[0] - s_start[0], s_goal[1] - s_start[1])
-    
-    def is_collision(self, s_start, s_end):
-        if s_start in self.obstacles or s_end in self.obstacles:
-            return True
-
-        if s_start[0] != s_end[0] and s_start[1] != s_end[1]:
-            if s_end[0] - s_start[0] == s_start[1] - s_end[1]:
-                s1 = (min(s_start[0], s_end[0]), min(s_start[1], s_end[1]))
-                s2 = (max(s_start[0], s_end[0]), max(s_start[1], s_end[1]))
+        for path_portion in range(len(self.path.x_c)):
+            if self.path.is_circle[path_portion]:
+                # Le chemin est un cercle
+                # TODO
+                pass
             else:
-                s1 = (min(s_start[0], s_end[0]), max(s_start[1], s_end[1]))
-                s2 = (max(s_start[0], s_end[0]), min(s_start[1], s_end[1]))
+                # Le chemin est une courbe affine
+                # On vérifie sur chaque centimètre si on touche un obstacle
+                for x in range(int(self.path.start[path_portion][0]*100), int(self.path.end[path_portion][0]*100)):
+                    y = x * self.path.a[path_portion] + self.path.b[path_portion]
+                    if self.is_collision(x, y):
+                        # On a touché un obstacle, on doit trouver un point de contournement
+                        # On cherche un point sur la normale à la droite
+                        self.circumvent(path_portion, x, y)
+                        break
 
-            if s1 in self.obstacles or s2 in self.obstacles:
-                return True
+    def is_collision(self, x, y):
+        """
+        Vérifie si le point (x, y) touche un obstacle
+        """
+        (xf,yf) = (int(x*100), int(y*100))
+        return (xf, yf) in self.obstacles
 
-        return False
-    
-    def adapt_path(self, new_obstacles):
-        #  Check if there is an obstacle in the path
-        for e in new_obstacles:
-            if e in self.path:
-                # Obstacle in the path
-                for neighbour in self.get_neighbor(e):
-                    self.t[e] = 'OPEN'
-                    self.OPEN.add(e)
-        # Recompute path
-        bool_path = True
+    def calc_circle(self, start, goal, dodge_point):
+        """
+        Crée un cercle entre start et goal en passant par dodge_point
+        """
+        x = [start[0], dodge_point[0], goal[0]]
+        y = [start[1], dodge_point[1], goal[1]]
 
-        while bool_path:
-            result = self.process_state()
-            if result == -1:
-                print("ljqsfgmljSNJ")
-                return None
-            self.rebuild_path()
+        # Solve A*t = r
+        A = np.zeros((3, 3))
+        for i in range(3):
+            A[i] = np.array([2*x[i], 2*y[i], 1])
+        
+        r = np.zeros((3,1))
+        for i in range(3):
+            r[i] = -(y[i]**2 + x[i]**2)
+        
+        t = np.linalg.solve(A, r)
 
+        (a, b, c) = t
+        xc = -a
+        yc = -b
+        R = np.sqrt(xc**2 + yc**2 - c)
 
+        return (xc, yc, R)
+
+    def circumvent(self, path_portion, x, y):
+        # Find the normal
+        if self.path.is_circle:
+            # The path is a circle
+            (x0,y0) = self.path.start[path_portion]
+            (x1,y1) = self.path.end[path_portion]
+            (a,b) = ((y1-y0)/(x1-x0), y0 - x0*(y1-y0)/(x1-x0))
+        else:
+            # The path is an affine
+            (a,b) = (self.path.a[path_portion], self.path.b[path_portion])
+
+        # Find the normal vector
+        u = np.array([-a, 1])
+        u = u/np.linalg.norm(u)
+
+        # Find the center of the obstacle_zone
+        x_end = x
+        y_end = y
+
+        while self.is_collision(x_end, y_end):
+            x_end += 0.01 # Regarde un cm plus loin
+            y_end += 0.01 * a
+        
+        x_middle = (x + x_end)/2
+        y_middle = (y + y_end)/2
+
+        # Find the dodge point
+        while self.is_collision(x_middle, y_middle):
+            x_middle += u[0] * 0.01
+            y_middle += u[1] * 0.01
+        
+        # Find the circle
+        (xc, yc, R) = self.calc_circle((x,y), (x_end, y_end), (x_middle, y_middle))
+        self.add_circle(xc, yc, R, (x,y), (x_end, y_end), path_portion)
+
+    def follow_path(self):
+        """
+        Fait suivre le chemin au robot
+        """
+        pos = self.robot_data.pos
+        path = self.path
+
+        # On vérifie si on est arrivé à la fin d'une portion de chemin
+        if np.sqrt((pos[0]-path.end[self.path_portion][0])**2 + (pos[1]-path.end[self.path_portion][1])**2) < 0.001:
+            self.path_portion += 1
+            print("Portion suivante")
+
+        if path.is_circle[self.path_portion]:
+            # Trouver la position du robot sur le cercle
+            #DEBUG
+            print(path.x_c[self.path_portion], path.y_c[self.path_portion], path.R[self.path_portion])
+            angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
+            angle += path.sfb(path.sens[self.path_portion])*0.01
+            pos[0] = path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle)
+            pos[1] = path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle)
+        else:
+                pos[0] += path.sfb(path.sens[self.path_portion])*0.01
+                pos[1] = pos[0]*path.a[self.path_portion] + path.b[self.path_portion]
+        rospy.log("Consigne : ", (pos[0],pos[1]))
+
+        # On publie la consigne
 
     # Callbacks
 
@@ -378,25 +238,8 @@ class NavigationNode():
         """
         Callback pour récupérer la position cible
         """
-        print("msg: " + str(msg))
-        msg = (msg.x*100//self.discretisation, msg.y*100//self.discretisation)
-        if msg != self.position_goal:
-            # Position goal has changed
-            self.position_goal = msg
-    
-            pos = (self.robot_data.position.x*100//self.discretisation, self.robot_data.position.y*100//self.discretisation)
-            print("Position goal: " + str(self.position_goal))
-            print("Position robot: " + str(pos))
-            self.init_dstar()
-            t = time.time()
-            path = self.find_path_without_obstacles(pos, self.position_goal)
-            print("Path found in " + str(time.time() - t) + "s")
-            if path != None:
-                rospy.loginfo('Path found: ' + str(path))
-                self.publish_pic_msg(path)
-                self.next_point
-            else:
-                rospy.loginfo('No path found')
+        print("Position goal : " + str(msg))
+        self.position_goal = [msg.x, msg.y]
         
     def publish_pic_msg(self, path):
         """
@@ -422,6 +265,7 @@ class NavigationNode():
         
     def robot_data_callback(self, msg):
         self.robot_data = msg
+  
 
     def obstacles_callback(self, msg):
         """
@@ -430,89 +274,14 @@ class NavigationNode():
         converted_obstacles est une liste de la forme [x,y,radius,[liste de points...]]
         """
 
-        old_dyn_obs = [self.dynamic_obstacles[k] for k in range(len(self.dynamic_obstacles))]
-        converted_obstacles = [] #Liste de tuples (x,y,radius)
-
-        tmp = [(obstacle.center.x, obstacle.center.y, obstacle.radius) for obstacle in msg.circles]
-
-        # Convert data to a list of tuples
-        for circ in tmp:
-            converted_obstacles+=[[circ[0], circ[1], circ[2], []]]
-            for i in range(0, 360):
-                converted_obstacles[-1][3] +=  [(int(circ[0]*100 + circ[2]*np.cos(i*np.pi/180)*100)//self.discretisation, int(circ[1]*100 + circ[2]*np.sin(i*np.pi/180)*100)//self.discretisation)]
-                converted_obstacles[-1][3] +=  [(int(circ[0]*100 + (circ[2]-self.discretisation/100)*np.cos(i*np.pi/180)*100)//self.discretisation, int(circ[1]*100 + (circ[2]-self.discretisation/100)*np.sin(i*np.pi/180)*100)//self.discretisation)]
-        
-        #Find new obstacles
-
-        new_obstacles = [converted_obstacles[k] for k in range(len(converted_obstacles))]
-        for obs in converted_obstacles:
-            for p in self.dynamic_obstacles:
-                if obs[0]==p[0] and obs[1]==p[1] and obs[2]==p[2]:
-                    # There is a new obstacle
-                    new_obstacles.remove(p)
-        
-        if new_obstacles != []:
-            # There are new obstacles
-            # Remove duplicate
-            dyn_without_duplicate = []
-            for obs in new_obstacles:
-                for e in obs[3]:
-                    b = True
-                    for f in dyn_without_duplicate:
-                        if e[0] == f[0] and e[1] == f[1]:
-                            b = False
-                            break
-                    if b:
-                        dyn_without_duplicate += [e]
-            self.dynamic_obstacles = dyn_without_duplicate
-            self.obstacles = self.static_obstacles + self.dynamic_obstacles
-            print("There is new obstacles")
-            # Adapt path
-            
-
-
-        # Is there any relevant removed obstacles ?
-        for obs in old_dyn_obs:
-            removed = True
-            for p in converted_obstacles:
-                if obs[0]==p[0] and obs[1]==p[1] and obs[2]==p[2]:
-                    removed = False
-            if removed:
-                dyn_without_duplicate = []
-                for obs in new_obstacles:
-                    for e in obs[3]:
-                        b = True
-                        for f in dyn_without_duplicate:
-                            if e[0] == f[0] and e[1] == f[1]:
-                                b = False
-                                break
-                        if b:
-                            dyn_without_duplicate += [tuple(e)]
-                self.dynamic_obstacles = converted_obstacles
-                self.obstacles = self.static_obstacles + sum([self.dynamic_obstacles[k][3] for k in range(len(self.dynamic_obstacles))], [])
-                # There is a removed obstacle
-                print("There is removed obstacles")
-                np.save("log.npy", self.obstacles)
-                
-                self.find_path_without_obstacles((self.robot_data.position.x*100//self.discretisation, self.robot_data.position.y*100//self.discretisation), self.position_goal)
-                break
-
-
-
-        
-    
+                  
     def next_point_callback(self, msg):
         self.next_point = msg
     
     def motion_done_callback(self, msg):
         pass
         
-                
-
-
-
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     rospy.init_node('navigation_node', anonymous=False)
 
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_x/Pos_goal')
