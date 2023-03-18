@@ -91,8 +91,10 @@ class NavigationNode():
         self.static_obstacles = np.load("cvmap.npy")
         self.map_obstacles = self.static_obstacles.copy()
 
-        
+        # Initialize the board
+        self.board = (200,300)
 
+        
     def find_path_without_obstacles(self, start, goal):
         """
         Trouve un chemin entre deux points sans obstacles
@@ -321,6 +323,46 @@ class NavigationNode():
         """
         Callback pour récupérer les obstacles
         """
+        
+        ## On récupère les obstacles
+        Liste_obstacle = [(obstacle.center.x, obstacle.center.y, obstacle.radius) for obstacle in msg.circles]
+
+        ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
+        Obstacles_coherents = []
+
+        x_plateau = self.board[0]
+        y_plateau = self.board[1]
+
+        for obstacle in Liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
+            if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50) and (obstacle[2]<50):
+                Obstacles_coherents.append(obstacle)
+
+        ## On crée une aire de jeu plus grande que le plateau pour traiter les obstacles hors du plateau
+
+        x_plateau_max = x_plateau + 200                    # On rajoute 100cm de marge sur chaque côté
+        y_plateau_max = y_plateau + 200
+
+        Cadrillage_max = np.zeros((x_plateau_max, y_plateau_max))
+
+        ## On crée une matrice associée à chaque obstacle
+        
+        for obstacle in Liste_obstacle:
+            x_obstacle = obstacle[0]+100
+            y_obstacle = obstacle[1]+100
+            rayon_obstacle = obstacle[2]
+
+            # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
+            carre_rayon = rayon_obstacle**2
+            M_obstacle = ((np.arange(2*rayon_obstacle)-rayon_obstacle)**2+((np.arange(2*rayon_obstacle)-rayon_obstacle)**2).reshape(2*rayon_obstacle,1)<=carre_rayon).astype(int)
+
+            # On place la matrice dans la matrice Cadrillage_max aux bonnes coordonnées
+            Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle]= np.logical_or(Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle],M_obstacle)
+
+        ## On crée une matrice associée au plateau
+        Cadrillage_rempli = Cadrillage_max[100:x_plateau_max-100,100:y_plateau+100]
+
+        ## On met à jour les informations sur le plateau
+        self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
 
                   
     def next_point_callback(self, msg):
