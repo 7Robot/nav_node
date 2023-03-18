@@ -23,5 +23,5 @@ Dans la grande majorité des cas, le chemin le plus court entre deux points est 
 * [x] is_collision
 * [x] calc_circle
 * [ ] circumvent
-* [x] follow_path
+* [x] follow_path (Il faut changer la publication de la valeur)
 * [ ] obstacles_callback

@@ -42,9 +42,9 @@ class PathCircle():
         self.end.insert(path_portion,end)
 
         # On vérifie si en allant dans le sens trigo on se rapproche de la cible
-        psi = np.angle(start[0] + 1j*start[1] - (x_c + 1j*y_c))
-        eps = 0.174533 # 10° en radians
-        self.sens.insert(path_portion,))
+        #psi = np.angle(start[0] + 1j*start[1] - (x_c + 1j*y_c))
+        #eps = 0.174533 # 10° en radians
+        self.sens.insert(path_portion,sens)
 
         self.a.insert(path_portion,0)
         self.b.insert(path_portion,0)
@@ -90,12 +90,14 @@ class NavigationNode():
         # Initialize static obstacles
         self.static_obstacles = np.load("cvmap.npy")
         self.map_obstacles = self.static_obstacles.copy()
-        self.max_radius = 0.28
+        self.max_radius = 0.28                               # Attention, à mofifier selon tailles des robots sur le terrain
 
         # Initialize the board
         self.board = (200,300)
 
         
+    
+
     def find_path_without_obstacles(self, start, goal):
         """
         Trouve un chemin entre deux points sans obstacles
@@ -131,6 +133,11 @@ class NavigationNode():
             self.path.b += [0]
             print("Division par 0 !!!")
 
+        # On vérifie si le chemin est un cercle
+        self.path.is_circle += [False]
+        self.path.x_c += [0]
+        self.path.y_c += [0]
+        self.path.R += [0]
 
         # On vérifie si la courbe est bien croissante ou décroissante
         self.path.sens += [x1 > x0]
@@ -171,12 +178,14 @@ class NavigationNode():
                         continue
 
     def is_collision(self, x, y):
-        """
-        Vérifie si le point (x, y) touche un obstacle
-        """
-        (xf,yf) = (int(x*100), int(y*100))
-        return self.map_obstacles[xf, yf] != 0
+            """
+            Vérifie si le point (x, y) touche un obstacle
+            """
+            (xf,yf) = (int(x*100), int(y*100))
+            #print("x : ", xf, "y : ", yf)
+            return self.map_obstacles[xf, yf] != 0
 
+    
     def calc_circle(self, start, goal, dodge_point):
         """
         Crée un cercle entre start et goal en passant par dodge_point
@@ -193,9 +202,16 @@ class NavigationNode():
         for i in range(3):
             r[i] = -(y[i]**2 + x[i]**2)
         
-        t = np.linalg.solve(A, r)
+        try:    
+            t = np.linalg.solve(A, r)
+        except np.linalg.LinAlgError:
+            print("Le chemin est une ligne droite")
+            print("A : ", A)
+            print("r : ", r)
+            return
 
         (a, b, c) = t
+        print("t : ", t)
         xc = -a
         yc = -b
         R = np.sqrt(xc**2 + yc**2 - c)
@@ -203,9 +219,11 @@ class NavigationNode():
         # Find the sens
         psi = np.angle(start[0] + 1j*start[1] - (xc + 1j*yc))
         eps = 0.174533 # 10° en radians
-        sens = np.hypot(goal[0] - start[0], goal[1] - start[1]) > np.hypot(goal[0] - xc + R*np.cos(psi), goal[1] - yc + R*np.sin(psi))
+        sens = np.hypot(goal[0] - start[0], goal[1] - start[1]) > np.hypot(goal[0] - xc + R*np.cos(psi+eps), goal[1] - yc + R*np.sin(psi+eps))
 
+        print("xc : ", xc, "yc : ", yc, "R : ", R, "sens : ", sens)
         return (xc, yc, R, sens)
+    
 
     def circumvent(self, path_portion, x, y):
         """
@@ -261,9 +279,10 @@ class NavigationNode():
         """
         Fait suivre le chemin au robot
         """
-        pos = self.robot_data.pos
+        pos = self.robot_data.position
         path = self.path
-# On vérifie si on est arrivé à la fin d'une portion de chemin
+
+        # On vérifie si on est arrivé à la fin d'une portion de chemin
         if (pos[0]-path.end[self.path_portion][0])**2 + (pos[1]-path.end[self.path_portion][1])**2 < self.distance_interpoint**2:
             self.path_portion += 1
             print("Portion suivante")
@@ -281,11 +300,13 @@ class NavigationNode():
         else:
                 pos[0] += path.sfb(path.sens[self.path_portion])*self.distance_interpoint/np.sqrt(1+path.a[self.path_portion]**2)
                 pos[1] = pos[0]*path.a[self.path_portion] + path.b[self.path_portion]
-        rospy.log("Consigne : ", (pos[0],pos[1]))
+        
+        #rospy.log("Consigne : ", (pos[0],pos[1]))
 
         # On publie la consigne
 
-        self.publish_pic_msg((pos[0],pos[1]))
+        #self.publish_pic_msg((pos[0],pos[1]))
+        self.robot_data.position = pos
 
     # Callbacks
 
