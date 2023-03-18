@@ -90,6 +90,7 @@ class NavigationNode():
         # Initialize static obstacles
         self.static_obstacles = np.load("cvmap.npy")
         self.map_obstacles = self.static_obstacles.copy()
+        self.max_radius = 0.28
 
         # Initialize the board
         self.board = (200,300)
@@ -325,7 +326,7 @@ class NavigationNode():
         """
         
         ## On récupère les obstacles
-        Liste_obstacle = [(obstacle.center.x, obstacle.center.y, obstacle.radius) for obstacle in msg.circles]
+        Liste_obstacle = [(obstacle.position.x, obstacle.position.y, self.max_radius) for obstacle in msg.other_robot_lidar]
 
         ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
         Obstacles_coherents = []
