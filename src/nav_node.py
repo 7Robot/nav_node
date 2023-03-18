@@ -44,7 +44,7 @@ class PathCircle():
         # On vérifie si en allant dans le sens trigo on se rapproche de la cible
         psi = np.angle(start[0] + 1j*start[1] - (x_c + 1j*y_c))
         eps = 0.174533 # 10° en radians
-        self.sens.insert(path_portion,np.hypot(end[0] - start[0], end[1] - start[1]) > np.hypot(end[0] - x_c + R*np.cos(psi), end[1] - y_c + R*np.sin(psi)))
+        self.sens.insert(path_portion,))
 
         self.a.insert(path_portion,0)
         self.b.insert(path_portion,0)
@@ -62,12 +62,18 @@ class PathCircle():
         self.y_c.insert(path_portion,0)
         self.R.insert(path_portion,0)
         self.sens.insert(path_portion,end[0]>start[0])
+    
+    def sfb(self, b):
+        """
+        Retourne 1 si b est True, -1 sinon
+        """
+        return 1 if b else -1
         
 
 
 
 class NavigationNode():
-    def __init__(self, distance_interpoint):
+    def __init__(self, distance_interpoint, margin):
         # Initialize the node
         rospy.init_node('navigation_node', anonymous=True)
 
@@ -79,6 +85,7 @@ class NavigationNode():
         self.path_portion = 0
         self.next_goal = []
         self.distance_interpoint = distance_interpoint
+        self.margin = margin
 
         # Initialize static obstacles
         self.static_obstacles = np.load("cvmap.npy")
@@ -102,19 +109,28 @@ class NavigationNode():
             - path : PathCubic\n
                 Chemin cubique définit plus haut
         """
-        
+        # Réinitialisation du chemin
+        self.path = PathCircle()
+        self.path_portion = 0
+
+
         self.path.start += [start]
         self.path.end = [goal]
 
-        # Calcul des coefficients de la courbe cubique, on envisage d'abord une courbe affine
+        # Calcul des coefficients de la courbe affine
         (x0, y0) = start
         (x1, y1) = goal
-        
-        self.path.a += [(y1-y0)/(x1-x0)]
-        self.path.b += [y0 - x0*(y1-y0)/(x1-x0)]
+        try:
+            self.path.a += [(y1-y0)/(x1-x0)]
+            self.path.b += [y0 - x0*(y1-y0)/(x1-x0)]
+        except ZeroDivisionError:
+            self.path.a += [0]
+            self.path.b += [0]
+            print("Division par 0 !!!")
+
 
         # On vérifie si la courbe est bien croissante ou décroissante
-        self.sens += [x1 > x0]
+        self.path.sens += [x1 > x0]
 
 
     def correct_path(self, path):
@@ -125,25 +141,38 @@ class NavigationNode():
         for path_portion in range(len(self.path.x_c)):
             if self.path.is_circle[path_portion]:
                 # Le chemin est un cercle
-                # TODO
-                pass
+                # On vérifie sur chaque centimètre si on touche un obstacle
+                pos = self.path.start[path_portion]
+                dtheta = 1-0.01**2/(2*path.R[self.path_portion]**2)
+
+                while np.linalg.norm(pos - self.path.end[path_portion]) > 0.01:
+                    angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
+                    angle += path.sfb(path.sens[self.path_portion])*np.arccos(dtheta)
+                    pos[0] = int(path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle))
+                    pos[1] = int(path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle))
+                    if self.is_collision(pos[0], pos[1]):
+                        # On a touché un obstacle, on doit trouver un point de contournement
+                        # On cherche un point sur la normale à la droite
+                        self.circumvent(path_portion, pos[0], pos[1])
+                        continue
+
             else:
                 # Le chemin est une courbe affine
                 # On vérifie sur chaque centimètre si on touche un obstacle
-                for x in range(int(self.path.start[path_portion][0]*100), int(self.path.end[path_portion][0]*100)):
+                for x in range(int(self.path.start[path_portion][0]), int(self.path.end[path_portion][0])):
                     y = x * self.path.a[path_portion] + self.path.b[path_portion]
                     if self.is_collision(x, y):
                         # On a touché un obstacle, on doit trouver un point de contournement
                         # On cherche un point sur la normale à la droite
                         self.circumvent(path_portion, x, y)
-                        break
+                        continue
 
     def is_collision(self, x, y):
         """
         Vérifie si le point (x, y) touche un obstacle
         """
         (xf,yf) = (int(x*100), int(y*100))
-        return self.map_obstacles[xf, yf] == 1
+        return self.map_obstacles[xf, yf] != 0
 
     def calc_circle(self, start, goal, dodge_point):
         """
@@ -189,6 +218,7 @@ class NavigationNode():
         else:
             # The path is an affine
             (a,b) = (self.path.a[path_portion], self.path.b[path_portion])
+        sens = x > self.robot_data.position[0]
 
         # Find the normal vector
         u = np.array([-a, 1])
@@ -210,6 +240,16 @@ class NavigationNode():
             x_middle += u[0] * 0.01
             y_middle += u[1] * 0.01
         
+        """
+        # Create margin around the obstacle
+        x_start = x-self.path.sfb(sens)*self.path.margin
+            # Si le chemin est croissant x_start doit être plus grand que pos[0] et inversement
+        if sens and x_start<self.robot_data.position[0]:
+            x_start = self.robot_data.position[0]
+        elif not sens and x_start>self.robot_data.position[0]:
+            x_start = self.robot_data.position[0]
+        
+        """
         # Find and create the circle
         (xc, yc, R) = self.calc_circle((x,y), (x_end, y_end), (x_middle, y_middle))
         self.add_circle(xc, yc, R, (x,y), (x_end, y_end), path_portion)
@@ -220,20 +260,21 @@ class NavigationNode():
         """
         pos = self.robot_data.pos
         path = self.path
-
-        # On vérifie si on est arrivé à la fin d'une portion de chemin
+# On vérifie si on est arrivé à la fin d'une portion de chemin
         if (pos[0]-path.end[self.path_portion][0])**2 + (pos[1]-path.end[self.path_portion][1])**2 < self.distance_interpoint**2:
             self.path_portion += 1
             print("Portion suivante")
 
         if path.is_circle[self.path_portion]:
             # Trouver la position du robot sur le cercle
-            #DEBUG
-            print(path.x_c[self.path_portion], path.y_c[self.path_portion], path.R[self.path_portion])
             angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
-            angle += path.sfb(path.sens[self.path_portion])*np.arccos(2-self.distance_interpoint**2/path.R[self.path_portion]**2)
-            pos[0] = path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle)
-            pos[1] = path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle)
+            dtheta = 1-self.distance_interpoint**2/(2*path.R[self.path_portion]**2)
+            if  dtheta > 1:
+                pos = path.end[self.path_portion]
+            else:
+                angle += path.sfb(path.sens[self.path_portion])*np.arccos(dtheta)
+                pos[0] = path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle)
+                pos[1] = path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle)
         else:
                 pos[0] += path.sfb(path.sens[self.path_portion])*self.distance_interpoint/np.sqrt(1+path.a[self.path_portion]**2)
                 pos[1] = pos[0]*path.a[self.path_portion] + path.b[self.path_portion]
@@ -299,7 +340,7 @@ if __name__ == '__main__':
     cv_obstacle_file = rospy.get_param('~cv_obstacle_file', 'default')
     debug_mode = rospy.get_param('~debug_mode', False)
     distance_interpoint = rospy.get_param('~distance_interpoint', '15')
-    avoidance_trigger_distance = rospy.get_param('~avoidance_trigger_distance', 0.3) #m
+    margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_x/Odom')
     robot_x_dimension = rospy.get_param('~robot_x_dimension', 0.5) #m
@@ -312,7 +353,7 @@ if __name__ == '__main__':
         action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
 
     # Création de la classe NavigationNode
-    Nav_node = NavigationNode(distance_interpoint)
+    Nav_node = NavigationNode(distance_interpoint, margin)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
