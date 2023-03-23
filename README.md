@@ -24,4 +24,4 @@ Dans la grande majorité des cas, le chemin le plus court entre deux points est 
 * [x] calc_circle
 * [ ] circumvent
 * [x] follow_path (Il faut changer la publication de la valeur)
-* [ ] obstacles_callback
+* [x] obstacles_callback
