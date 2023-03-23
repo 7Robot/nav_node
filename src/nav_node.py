@@ -5,8 +5,6 @@ from cdf_msgs.msg import RobotData, Pic_Action
 from virtual_robot.msg import Virtual_Robot_ActionAction, Virtual_Robot_ActionGoal
 from std_msgs.msg import Bool
 import numpy as np
-import time
-import cv2
 import actionlib
 
 class PathCircle():
@@ -68,9 +66,6 @@ class PathCircle():
         Retourne 1 si b est True, -1 sinon
         """
         return 1 if b else -1
-        
-
-
 
 class NavigationNode():
     def __init__(self, distance_interpoint, margin):
@@ -142,20 +137,21 @@ class NavigationNode():
         # On vérifie si la courbe est bien croissante ou décroissante
         self.path.sens += [x1 > x0]
 
-
-    def correct_path(self, path):
+    def correct_path(self):
         """
         Corrige le chemin pour éviter les obstacles
         """
+        path = self.path
 
         for path_portion in range(len(self.path.x_c)):
+            print("Portion : ", path_portion)
             if self.path.is_circle[path_portion]:
                 # Le chemin est un cercle
                 # On vérifie sur chaque centimètre si on touche un obstacle
                 pos = self.path.start[path_portion]
                 dtheta = 1-0.01**2/(2*path.R[self.path_portion]**2)
 
-                while np.linalg.norm(pos - self.path.end[path_portion]) > 0.01:
+                while np.linalg.norm(pos - self.path.end[path_portion]) > 0.02:
                     angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
                     angle += path.sfb(path.sens[self.path_portion])*np.arccos(dtheta)
                     pos[0] = int(path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle))
@@ -164,18 +160,20 @@ class NavigationNode():
                         # On a touché un obstacle, on doit trouver un point de contournement
                         # On cherche un point sur la normale à la droite
                         self.circumvent(path_portion, pos[0], pos[1])
-                        continue
-
+                        return
             else:
                 # Le chemin est une courbe affine
                 # On vérifie sur chaque centimètre si on touche un obstacle
-                for x in range(int(self.path.start[path_portion][0]), int(self.path.end[path_portion][0])):
+                print("increment : ", 0.01/np.sqrt(1+path.a[self.path_portion]**2))
+                for x in np.linspace(self.path.start[path_portion][0], self.path.end[path_portion][0], int(abs(self.path.start[path_portion][0]-self.path.end[path_portion][0])/(0.01/np.sqrt(1+path.a[self.path_portion]**2)))):
                     y = x * self.path.a[path_portion] + self.path.b[path_portion]
+                    #print("pos : ", (x,y))
                     if self.is_collision(x, y):
                         # On a touché un obstacle, on doit trouver un point de contournement
                         # On cherche un point sur la normale à la droite
+                        print("Collision détectée en ", x, y)
                         self.circumvent(path_portion, x, y)
-                        continue
+                        return
 
     def is_collision(self, x, y):
             """
@@ -185,7 +183,6 @@ class NavigationNode():
             #print("x : ", xf, "y : ", yf)
             return self.map_obstacles[xf, yf] != 0
 
-    
     def calc_circle(self, start, goal, dodge_point):
         """
         Crée un cercle entre start et goal en passant par dodge_point
@@ -223,7 +220,6 @@ class NavigationNode():
 
         print("xc : ", xc, "yc : ", yc, "R : ", R, "sens : ", sens)
         return (xc, yc, R, sens)
-    
 
     def circumvent(self, path_portion, x, y):
         """
@@ -249,6 +245,8 @@ class NavigationNode():
         x_end = x
         y_end = y
 
+        # Find the end of the obstacle_zone
+        print("Initial :", x_end, y_end)
         while self.is_collision(x_end, y_end):
             x_end += 0.01 # Regarde un cm plus loin
             y_end += 0.01 * a
@@ -257,24 +255,45 @@ class NavigationNode():
         y_middle = (y + y_end)/2
 
         # Find the dodge point
-        while self.is_collision(x_middle, y_middle):
-            x_middle += u[0] * 0.01
-            y_middle += u[1] * 0.01
-        
-        """
-        # Create margin around the obstacle
-        x_start = x-self.path.sfb(sens)*self.path.margin
-            # Si le chemin est croissant x_start doit être plus grand que pos[0] et inversement
-        if sens and x_start<self.robot_data.position[0]:
-            x_start = self.robot_data.position[0]
-        elif not sens and x_start>self.robot_data.position[0]:
-            x_start = self.robot_data.position[0]
-        
-        """
-        # Find and create the circle
-        (xc, yc, R) = self.calc_circle((x,y), (x_end, y_end), (x_middle, y_middle))
-        self.add_circle(xc, yc, R, (x,y), (x_end, y_end), path_portion)
+        sign = 1 # Le but de cette variable est de préférer un gros cercle à une sortie de plateau
 
+        while self.is_collision(x_middle, y_middle):
+
+            x_middle += u[0] * 0.01 * sign
+            y_middle += u[1] * 0.01 * sign
+            if x_middle <0 or y_middle <0 or x_middle > 300 or y_middle > 200:
+                sign = -1
+
+        # ajout de marge
+
+        # À droite
+        (x_start, y_start) = self.lookback(path_portion, x, y, self.margin)
+        if sens and x_start < self.robot_data.position[0]:
+            x_start = self.robot_data.position[0]
+        elif not sens and x_start > self.robot_data.position[0]:
+            x_start = self.robot_data.position[0]
+        
+        y_start = a*x_start + b
+
+        # À gauche 
+        
+        (x_end, y_end) = self.lookback(path_portion, x_end, y_end, -self.margin)
+        if sens and x_end > self.path.end[path_portion][0]:
+                x_end = self.robot_data.position[0]
+        elif not sens and x_end < self.path.end[path_portion][0]:
+                x_end = self.robot_data.position[0]
+
+
+        x_middle += u[0] * self.margin * sign
+        y_middle += u[1] * self.margin * sign
+
+        print("x_start : ", x_start, "y_start : ", y_start)
+        print("x_end : ", x_end, "y_end : ", y_end)
+        print("x_middle : ", x_middle, "y_middle : ", y_middle)
+
+        (xc, yc, R, sens) = self.calc_circle((x_start,y_start), (x_end, y_end), (x_middle, y_middle))
+        self.path.add_circle(xc, yc, R, (x_start, y_start), (x_end, y_end), sens, path_portion+1)
+ 
     def follow_path(self):
         """
         Fait suivre le chemin au robot
@@ -307,6 +326,20 @@ class NavigationNode():
 
         #self.publish_pic_msg((pos[0],pos[1]))
         self.robot_data.position = pos
+ 
+    def lookback(self, path_portion, x, y, val):
+        if self.path.is_circle[path_portion]:
+            cosdtheta = 1-val**2/(2*self.path.R[path_portion]**2)
+            angle = np.angle(x + 1j*y - (self.path.x_c[path_portion] + 1j*self.path.y_c[path_portion]))
+            angle += self.path.sfb(self.path.sens[path_portion])*np.arccos(cosdtheta)
+            new_x = self.path.x_c[path_portion] + self.path.R[path_portion]*np.cos(angle)
+            new_y = self.path.y_c[path_portion] + self.path.R[path_portion]*np.sin(angle)
+            return (new_x, new_y)
+        else:
+            new_x = x - self.path.sfb(self.path.sens[path_portion])*val/np.sqrt(1+self.path.a[path_portion]**2)
+            new_y = self.path.a[path_portion]*new_x + self.path.b[path_portion]
+            return (new_x, new_y)
+
 
     # Callbacks
 
@@ -339,7 +372,6 @@ class NavigationNode():
         
     def robot_data_callback(self, msg):
         self.robot_data = msg
-  
 
     def obstacles_callback(self, msg):
         """
