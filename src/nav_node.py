@@ -7,338 +7,158 @@ from std_msgs.msg import Bool
 import numpy as np
 import actionlib
 
-class PathCircle():
-    """
-    Classe définissant un chemin comme arc de cercle
+class NavNode():
+    def __init__(self, margin=0.03, pos = np.array([0,0]), max_radius = 0.35):
+        self.path = []
+        self.margin = margin
+        self.position_goal = None
 
-    x²+y²+2ax+2by+c=0
-
-    Le robot utilise x_c, y_c et R/ a et b entre start[0] et end[0] et parcours la courbe dans le sens sens[0] (False sens horaire/ x décroissants, True sens trigo/x croissants)
-    is_circle[0] est True si le chemin est un cercle, False si c'est une affine
-    """
-    def __init__(self):
-        self.x_c = []
-        self.y_c = []
-        self.R = []
-
-        self.a = []
-        self.b = []
-
-        self.is_circle = []
-
-        self.start = []
-        self.end = []
-        self.sens = []    
-
-    def add_circle(self, x_c, y_c, R, start, end, sens, path_portion):
-        self.x_c.insert(path_portion,x_c)
-        self.y_c.insert(path_portion,y_c)
-        self.R.insert(path_portion,R)
-        self.is_circle.insert(path_portion,True)
-        self.start.insert(path_portion,start)
-        self.end[path_portion-1] = start
-        self.end.insert(path_portion,end)
-
-        # On vérifie si en allant dans le sens trigo on se rapproche de la cible
-        #psi = np.angle(start[0] + 1j*start[1] - (x_c + 1j*y_c))
-        #eps = 0.174533 # 10° en radians
-        self.sens.insert(path_portion,sens)
-
-        self.a.insert(path_portion,0)
-        self.b.insert(path_portion,0)
-
-    def add_affine(self, start, end, path_portion):
-        self.start.insert(path_portion,start)
-        self.end[path_portion-1] = start
-        self.end.insert(path_portion,end)
-
-        self.is_circle.insert(path_portion,False)
-        self.a.insert(path_portion,(end[1]-start[1])/(end[0]-start[0]))
-        self.b.insert(path_portion,start[1] - start[0]*(end[1]-start[1])/(end[0]-start[0]))
-
-        self.x_c.insert(path_portion,0)
-        self.y_c.insert(path_portion,0)
-        self.R.insert(path_portion,0)
-        self.sens.insert(path_portion,end[0]>start[0])
-    
-    def sfb(self, b):
-        """
-        Retourne 1 si b est True, -1 sinon
-        """
-        return 1 if b else -1
-
-class NavigationNode():
-    def __init__(self, distance_interpoint, margin):
-        # Initialize the node
-        rospy.init_node('navigation_node', anonymous=True)
-
-        # Initialize the robot data
+        self.map_static_obstacles = np.load("cvmap2.npy")
+        self.map_obstacles = self.map_static_obstacles.copy()
+        self.max_radius = max_radius
+        
         self.robot_data = RobotData()
 
-        # Initialize the path
-        self.path = PathCircle()
-        self.path_portion = 0
-        self.next_goal = []
-        self.distance_interpoint = distance_interpoint
-        self.margin = margin
-
-        # Initialize static obstacles
-        self.static_obstacles = np.load("cvmap.npy")
-        self.map_obstacles = self.static_obstacles.copy()
-        self.max_radius = 0.28                               # Attention, à mofifier selon tailles des robots sur le terrain
-
-        # Initialize the board
-        self.board = (200,300)
-
-        
-    
-
-    def find_path_without_obstacles(self, start, goal):
+    def find_middle_obstacles(self, path, path_portion : int):
         """
-        Trouve un chemin entre deux points sans obstacles
+        Find the beginning and the end of the obstacle in the path portion
 
-        Paramètres
+        Parameters
         ----------
-            - start : tuple\n
-                Position de départ du robot
-            - goal : tuple\n
-                Position cible du robot
+        path_portion : int Portion de 
 
-        Retourne
-        ----------
-            - path : PathCubic\n
-                Chemin cubique définit plus haut
         """
-        # Réinitialisation du chemin
-        self.path = PathCircle()
-        self.path_portion = 0
+        start = np.array(path[path_portion])
+        end = np.array(path[path_portion + 1])
 
+        discretisation = np.linspace(start, end, int(np.linalg.norm(end-start)/(np.linalg.norm(start - end)*0.01)))
 
-        self.path.start += [start]
-        self.path.end = [goal]
+        index_in_disc = 0
+        (x, y) = (discretisation[index_in_disc, 0], discretisation[index_in_disc, 1])
 
-        # Calcul des coefficients de la courbe affine
-        (x0, y0) = start
-        (x1, y1) = goal
-        try:
-            self.path.a += [(y1-y0)/(x1-x0)]
-            self.path.b += [y0 - x0*(y1-y0)/(x1-x0)]
-        except ZeroDivisionError:
-            self.path.a += [0]
-            self.path.b += [0]
-            print("Division par 0 !!!")
+        # Find the beginning of the obstacle
+        while not(self.is_obstacle(x,y)) and index_in_disc < len(discretisation) - 1:
+            index_in_disc += 1
+            (x, y) = (discretisation[index_in_disc, 0], discretisation[index_in_disc, 1])
+        
+        if index_in_disc == len(discretisation) - 1:
+            return False
+        
+        start_obstacle = discretisation[index_in_disc]
 
-        # On vérifie si le chemin est un cercle
-        self.path.is_circle += [False]
-        self.path.x_c += [0]
-        self.path.y_c += [0]
-        self.path.R += [0]
+        # Find the end of the obstacle
+        while self.is_obstacle(x,y) and index_in_disc < len(discretisation) - 1:
+            index_in_disc += 1
+            (x, y) = (discretisation[index_in_disc, 0], discretisation[index_in_disc, 1])
+        
+        if index_in_disc == len(discretisation) - 1:
+            print("ERREUR : obstacle non fermé")
+            return None
+        else:
+            end_obstacle = discretisation[index_in_disc]
 
-        # On vérifie si la courbe est bien croissante ou décroissante
-        self.path.sens += [x1 > x0]
-
-    def correct_path(self):
+            return (start_obstacle, end_obstacle)
+        
+    def is_obstacle(self, x, y):    # modifier pour que collision soit un encadrement et pas une valeur exacte ?
         """
-        Corrige le chemin pour éviter les obstacles
+        Vérifie si le point (x, y) touche un obstacle
         """
-        path = self.path
+        (xf,yf) = (int(x*100), int(y*100))
+        #print("x : ", xf, "y : ", yf)
+        if xf < 0 or yf < 0 or xf >= 200 or yf >= 300:
+            return True
+        return self.map_obstacles[xf, yf] != 0
 
-        for path_portion in range(len(self.path.x_c)):
-            print("Portion : ", path_portion)
-            if self.path.is_circle[path_portion]:
-                # Le chemin est un cercle
-                # On vérifie sur chaque centimètre si on touche un obstacle
-                pos = self.path.start[path_portion]
-                dtheta = 1-0.01**2/(2*path.R[self.path_portion]**2)
+    def find_normal_non_obstacle(self, start, end):
+        """ Find the nearest point outside of the obstacle space to define the new path
+        Everything is in meter
 
-                while np.linalg.norm(pos - self.path.end[path_portion]) > 0.02:
-                    angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
-                    angle += path.sfb(path.sens[self.path_portion])*np.arccos(dtheta)
-                    pos[0] = int(path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle))
-                    pos[1] = int(path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle))
-                    if self.is_collision(pos[0], pos[1]):
-                        # On a touché un obstacle, on doit trouver un point de contournement
-                        # On cherche un point sur la normale à la droite
-                        self.circumvent(path_portion, pos[0], pos[1])
-                        return
+        entry: 
+            start: (x,y): start point of the obstacle
+            end: (x,y): end point of the obstacle
+        
+        return:
+            detour: (x,y): the nearest point outside of the obstacle space
+
+        use: 
+            self.map_obstacle: map
+            self.margin: margin around the obstacle
+        """
+
+        vect_obstacle = np.array(end) - np.array(start)
+
+        # Find the normal vector and normalize it with np.linalg.norm
+        vec_norm = np.array([vect_obstacle[1], -vect_obstacle[0]])/np.linalg.norm(vect_obstacle) * 0.01
+
+        # Find the middle point of the obstacle on the vector
+        middle = np.array([(start[0]+end[0])/2, (start[1]+end[1])/2])
+
+        middle_sup = middle.copy()
+        middle_inf = middle.copy()
+
+        # Max distance is 350 cm, don't want to go too far
+        dist = 0
+
+        # Find the nearest point outside of the obstacle space + margin
+        while (self.is_obstacle(middle_sup[0],middle_sup[1]) and self.is_obstacle(middle_inf[0], middle_inf[1])) and dist < 3.5:
+            middle_sup += vec_norm  
+            middle_inf -= vec_norm    
+            dist += 0.01
+
+        # Return the nearest point
+        if dist > 3.5:
+            print("ERREUR : pas de point millieu trouvé")
+            return None      # No point found
+        else:
+            if self.is_obstacle(middle_sup[0], middle_sup[1]):
+                middle_inf_decal = middle_inf - self.margin * vec_norm * 100
+                if not(self.is_obstacle(middle_inf_decal[0], middle_inf_decal[1])):
+                    return middle_inf - self.margin * vec_norm * 100
+                else:
+                    print("ATTENTION : Chemin étroit")
+                    return middle_inf
             else:
-                # Le chemin est une courbe affine
-                # On vérifie sur chaque centimètre si on touche un obstacle
-                print("increment : ", 0.01/np.sqrt(1+path.a[self.path_portion]**2))
-                for x in np.linspace(self.path.start[path_portion][0], self.path.end[path_portion][0], int(abs(self.path.start[path_portion][0]-self.path.end[path_portion][0])/(0.01/np.sqrt(1+path.a[self.path_portion]**2)))):
-                    y = x * self.path.a[path_portion] + self.path.b[path_portion]
-                    #print("pos : ", (x,y))
-                    if self.is_collision(x, y):
-                        # On a touché un obstacle, on doit trouver un point de contournement
-                        # On cherche un point sur la normale à la droite
-                        print("Collision détectée en ", x, y)
-                        self.circumvent(path_portion, x, y)
-                        return
+                middle_sup_decal = middle_sup + self.margin * vec_norm * 100
+                if not(self.is_obstacle(middle_sup_decal[0], middle_sup_decal[1])):
+                    return middle_sup + self.margin * vec_norm * 100
+                else:
+                    print("ATTENTION : Chemin étroit")
+                    return middle_sup
 
-    def is_collision(self, x, y):
-            """
-            Vérifie si le point (x, y) touche un obstacle
-            """
-            (xf,yf) = (int(x*100), int(y*100))
-            #print("x : ", xf, "y : ", yf)
-            return self.map_obstacles[xf, yf] != 0
-
-    def calc_circle(self, start, goal, dodge_point):
+    def master_path(self, start, end):
         """
-        Crée un cercle entre start et goal en passant par dodge_point
-        """
-        x = [start[0], dodge_point[0], goal[0]]
-        y = [start[1], dodge_point[1], goal[1]]
-
-        # Solve A*t = r
-        A = np.zeros((3, 3))
-        for i in range(3):
-            A[i] = np.array([2*x[i], 2*y[i], 1])
-        
-        r = np.zeros((3,1))
-        for i in range(3):
-            r[i] = -(y[i]**2 + x[i]**2)
-        
-        try:    
-            t = np.linalg.solve(A, r)
-        except np.linalg.LinAlgError:
-            print("Le chemin est une ligne droite")
-            print("A : ", A)
-            print("r : ", r)
-            return
-
-        (a, b, c) = t
-        print("t : ", t)
-        xc = -a
-        yc = -b
-        R = np.sqrt(xc**2 + yc**2 - c)
-
-        # Find the sens
-        psi = np.angle(start[0] + 1j*start[1] - (xc + 1j*yc))
-        eps = 0.174533 # 10° en radians
-        sens = np.hypot(goal[0] - start[0], goal[1] - start[1]) > np.hypot(goal[0] - xc + R*np.cos(psi+eps), goal[1] - yc + R*np.sin(psi+eps))
-
-        print("xc : ", xc, "yc : ", yc, "R : ", R, "sens : ", sens)
-        return (xc, yc, R, sens)
-
-    def circumvent(self, path_portion, x, y):
-        """
-        Crée un arc de cercle entre la position et la fin de la portion de chemin
+        Calculate the path to go from start to end
         """
 
-        # Find the normal
-        if self.path.is_circle:
-            # The path is a circle
-            (x0,y0) = self.robot_data.position
-            (x1,y1) = self.path.end[path_portion]
-            (a,b) = ((y1-y0)/(x1-x0), y0 - x0*(y1-y0)/(x1-x0))
-        else:
-            # The path is an affine
-            (a,b) = (self.path.a[path_portion], self.path.b[path_portion])
-        sens = x > self.robot_data.position[0]
+        path = [start, end]
+        self.position_goal = end
 
-        # Find the normal vector
-        u = np.array([-a, 1])
-        u = u/np.linalg.norm(u)
+        path_portion = 0
 
-        # Find the center of the obstacle_zone
-        x_end = x
-        y_end = y
+        iter = 0
+        max_iter = 15
 
-        # Find the end of the obstacle_zone
-        print("Initial :", x_end, y_end)
-        while self.is_collision(x_end, y_end):
-            x_end += 0.01 # Regarde un cm plus loin
-            y_end += 0.01 * a
-        
-        x_middle = (x + x_end)/2
-        y_middle = (y + y_end)/2
-
-        # Find the dodge point
-        sign = 1 # Le but de cette variable est de préférer un gros cercle à une sortie de plateau
-
-        while self.is_collision(x_middle, y_middle):
-
-            x_middle += u[0] * 0.01 * sign
-            y_middle += u[1] * 0.01 * sign
-            if x_middle <0 or y_middle <0 or x_middle > 300 or y_middle > 200:
-                sign = -1
-
-        # ajout de marge
-
-        # À droite
-        (x_start, y_start) = self.lookback(path_portion, x, y, self.margin)
-        if sens and x_start < self.robot_data.position[0]:
-            x_start = self.robot_data.position[0]
-        elif not sens and x_start > self.robot_data.position[0]:
-            x_start = self.robot_data.position[0]
-        
-        y_start = a*x_start + b
-
-        # À gauche 
-        
-        (x_end, y_end) = self.lookback(path_portion, x_end, y_end, -self.margin)
-        if sens and x_end > self.path.end[path_portion][0]:
-                x_end = self.robot_data.position[0]
-        elif not sens and x_end < self.path.end[path_portion][0]:
-                x_end = self.robot_data.position[0]
-
-
-        x_middle += u[0] * self.margin * sign
-        y_middle += u[1] * self.margin * sign
-
-        print("x_start : ", x_start, "y_start : ", y_start)
-        print("x_end : ", x_end, "y_end : ", y_end)
-        print("x_middle : ", x_middle, "y_middle : ", y_middle)
-
-        (xc, yc, R, sens) = self.calc_circle((x_start,y_start), (x_end, y_end), (x_middle, y_middle))
-        self.path.add_circle(xc, yc, R, (x_start, y_start), (x_end, y_end), sens, path_portion+1)
- 
-    def follow_path(self):
-        """
-        Fait suivre le chemin au robot
-        """
-        pos = self.robot_data.position
-        path = self.path
-
-        # On vérifie si on est arrivé à la fin d'une portion de chemin
-        if (pos[0]-path.end[self.path_portion][0])**2 + (pos[1]-path.end[self.path_portion][1])**2 < self.distance_interpoint**2:
-            self.path_portion += 1
-            print("Portion suivante")
-
-        if path.is_circle[self.path_portion]:
-            # Trouver la position du robot sur le cercle
-            angle = np.angle(pos[0] + 1j*pos[1] - (path.x_c[self.path_portion] + 1j*path.y_c[self.path_portion]))
-            dtheta = 1-self.distance_interpoint**2/(2*path.R[self.path_portion]**2)
-            if  dtheta > 1:
-                pos = path.end[self.path_portion]
+        while path_portion<(len(path)-1) and iter < max_iter:
+            iter += 1
+            #print("path : ", path)
+            #print("path_portion : ", path_portion)
+            middle = self.find_middle_obstacles(path, path_portion)
+            if middle:
+                detour = self.find_normal_non_obstacle(middle[0], middle[1])
+                print("detour : ", detour)
+                if type(detour) != type(None):
+                    path.insert(path_portion+1, detour)
+                else:
+                    print("ERREUR : pas de trajectoire")
+                    return None
             else:
-                angle += path.sfb(path.sens[self.path_portion])*np.arccos(dtheta)
-                pos[0] = path.x_c[self.path_portion] + path.R[self.path_portion]*np.cos(angle)
-                pos[1] = path.y_c[self.path_portion] + path.R[self.path_portion]*np.sin(angle)
-        else:
-                pos[0] += path.sfb(path.sens[self.path_portion])*self.distance_interpoint/np.sqrt(1+path.a[self.path_portion]**2)
-                pos[1] = pos[0]*path.a[self.path_portion] + path.b[self.path_portion]
-        
-        #rospy.log("Consigne : ", (pos[0],pos[1]))
+                path_portion += 1
 
-        # On publie la consigne
+        if iter == max_iter:
+            print("ERREUR : trop d'itérations")
+            return None
 
-        #self.publish_pic_msg((pos[0],pos[1]))
-        self.robot_data.position = pos
- 
-    def lookback(self, path_portion, x, y, val):
-        if self.path.is_circle[path_portion]:
-            cosdtheta = 1-val**2/(2*self.path.R[path_portion]**2)
-            angle = np.angle(x + 1j*y - (self.path.x_c[path_portion] + 1j*self.path.y_c[path_portion]))
-            angle += self.path.sfb(self.path.sens[path_portion])*np.arccos(cosdtheta)
-            new_x = self.path.x_c[path_portion] + self.path.R[path_portion]*np.cos(angle)
-            new_y = self.path.y_c[path_portion] + self.path.R[path_portion]*np.sin(angle)
-            return (new_x, new_y)
-        else:
-            new_x = x - self.path.sfb(self.path.sens[path_portion])*val/np.sqrt(1+self.path.a[path_portion]**2)
-            new_y = self.path.a[path_portion]*new_x + self.path.b[path_portion]
-            return (new_x, new_y)
+        self.path = path
 
 
     # Callbacks
