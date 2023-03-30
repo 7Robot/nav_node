@@ -8,20 +8,7 @@ Dans la grande majorité des cas, le chemin le plus court entre deux points est 
     Avec $(a,b)=(\dfrac{y_1-y_0}{x_1-x_0}, y_0 - a\cdot x_0)$.
 * Deuxième étape : On vérifie pour chaque point sur le chemin si il y a collision avec un obstacle sur le chemin.
   
-* Si il y a collision, on trouve la taille de l'obstacle et on trace un arc de cercle autour de l'obstacle.
+* Si il y a collision, on place un point sur la normale à la trajectoire à mi-chemin entre le début et la fin de l'obstacle.
+  
+* On recommence tant que le chemin est obstrué sur une portion
 
-## Évitement d'obstacle
-
-## État des tests
-
-* [x] add_circle
-* [x] add_affine
-* [x] sfb
-
-* [x] find_path_without_obstacles
-* [ ] correct_path
-* [x] is_collision
-* [x] calc_circle
-* [ ] circumvent
-* [x] follow_path (Il faut changer la publication de la valeur)
-* [x] obstacles_callback
