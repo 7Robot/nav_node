@@ -8,7 +8,7 @@ import numpy as np
 import actionlib
 
 class NavNode():
-    def __init__(self, margin=0.03, pos = np.array([0,0]), max_radius = 0.35, max_iter = 15, distance_interpoint = 0.03):
+    def __init__(self, action_orders_pub, margin=0.03, pos = np.array([0,0]), max_radius = 0.35, max_iter = 15, distance_interpoint = 0.03, emergency_stop_distance = 0):
         self.path = []
         self.margin = margin
         self.position_goal = None
@@ -17,10 +17,15 @@ class NavNode():
         self.map_static_obstacles = np.load("cvmap2.npy")
         self.map_obstacles = self.map_static_obstacles.copy()
         self.max_radius = max_radius
+        self.shape_board = self.map_obstacles.shape
         
         self.robot_data = RobotData()
+        self.position = pos
         self.distance_interpoint = distance_interpoint
         self.next_goal = None
+        self.emergency_stop_distance = emergency_stop_distance
+
+        self.action_orders_pub = action_orders_pub
 
     def find_middle_obstacles(self, path, path_portion : int):
         """
@@ -103,7 +108,7 @@ class NavNode():
         dist = 0
 
         # Find the nearest point outside of the obstacle space + margin
-        while (self.is_obstacle(middle_sup[0],middle_sup[1]) and self.is_obstacle(middle_inf[0], middle_inf[1])) and dist < 3.5:
+        while (self.is_obstacle(middle_sup[0],middle_sup[1]) and self.is_obstacle(middle_inf[0], middle_inf[1])) and dist < np.sqrt((self.shape_board[0]/100)**2 + (self.shape_board[1]/100)**2):
             middle_sup += vec_norm  
             middle_inf -= vec_norm    
             dist += 0.01
@@ -192,7 +197,7 @@ class NavNode():
         """
 
         # Vérifie si un obstacle est sur le chemin
-        pos = self.robot_data.position
+        pos = self.position
         for i in range(len(self.path)-1):
             vect = np.array(self.path[i+1]) - np.array(self.path[i])/np.linalg.norm(np.array(self.path[i+1]) - np.array(self.path[i]))
             if np.linalg.norm(np.array(pos) - np.array(self.path[i])) < 0.1:
@@ -202,7 +207,7 @@ class NavNode():
 
             if self.is_obstacle(pos[0], pos[1]):
                 rospy.logwarn("Obstacle sur le chemin")
-                self.master_path(self.robot_data.position, self.position_goal)
+                self.master_path(self.position, self.position_goal)
                 return None
         
 
@@ -215,7 +220,7 @@ class NavNode():
         """
         rospy.logdebug("Position goal : " + str(msg))
         self.position_goal = [msg.x, msg.y]
-        self.master_path(self.robot_data.position, self.position_goal)
+        self.master_path(self.position, self.position_goal)
         
     def publish_pic_msg(self, next_goal):
         """
@@ -239,18 +244,31 @@ class NavNode():
         
     def robot_data_callback(self, msg):
         self.robot_data = msg
+        self.position = np.array([msg.position.x, msg.position.y])
+        
+        #Arret d'urgence
+        pos = self.position
+        for r in range(int(self.emergency_stop_distance*100)):
+            for x in range(r):
+                y = r - x
+                if self.is_obstacle(pos[0]+x, pos[1]-y) or self.is_obstacle(pos[0]-x, pos[1]+y):
+                    rospy.logwarn("Obstacle trop proche, ARRET D'URGENCE")
+                    self.path = None
+                    self.next_goal = None
+                    return None
+
         if self.path:
             if type(self.next_goal) == type(None):
-                vect = np.array(self.path[1]) - np.array(self.robot_data.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.robot_data.position))
-                self.next_goal = np.array(self.robot_data.position) + vect * self.distance_interpoint
+                vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
+                self.next_goal = np.array(self.position) + vect * self.distance_interpoint
             else:
-                if np.linalg.norm(np.array(self.robot_data.position) - np.array(self.next_goal)) < self.distance_interpoint:
-                    if np.linalg.norm(np.array(self.robot_data.position) - np.array(self.path[0])) < self.distance_interpoint:
+                if np.linalg.norm(np.array(self.position) - np.array(self.next_goal)) < self.distance_interpoint:
+                    if np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
                         self.path.pop(0)
                         self.next_goal = self.path[0]
                     else:
-                        vect = np.array(self.path[1]) - np.array(self.robot_data.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.robot_data.position))
-                        self.next_goal = self.robot_data.position + vect * self.distance_interpoint
+                        vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
+                        self.next_goal = self.position + vect * self.distance_interpoint
                     self.publish_pic_msg(self.next_goal)
 
     def obstacles_callback(self, msg):
@@ -298,10 +316,8 @@ class NavNode():
         ## On met à jour les informations sur le plateau
         self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
                  
-    def next_point_callback(self, msg):
         self.next_point = msg
     
-    def motion_done_callback(self, msg):
         pass
         
 if __name__ == '__main__':
@@ -310,16 +326,14 @@ if __name__ == '__main__':
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_x/Pos_goal')
     obstacles_topic = rospy.get_param('~obstacles_topic', '/obstacles')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_x/action')
-    next_point_topic = rospy.get_param('~next_point_topic', '/robot_x/asserv_next_point')
-    graph_file = rospy.get_param('~graph_file', 'default')
-    cv_obstacle_file = rospy.get_param('~cv_obstacle_file', 'default')
     debug_mode = rospy.get_param('~debug_mode', False)
-    distance_interpoint = rospy.get_param('~distance_interpoint', '15')
+    max_iter = rospy.get_param('~max_iter', 15)
+    distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_x/Odom')
-    robot_x_dimension = rospy.get_param('~robot_x_dimension', 0.5) #m
-    robot_y_dimension = rospy.get_param('~robot_y_dimension', 0.2) #m
+    #robot_x_dimension = rospy.get_param('~robot_x_dimension', 0.5) #m
+    #robot_y_dimension = rospy.get_param('~robot_y_dimension', 0.2) #m
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
@@ -328,13 +342,16 @@ if __name__ == '__main__':
         action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
 
     # Création de la classe NavigationNode
-    Nav_node = NavNode(distance_interpoint, margin)
+    Nav_node = NavNode(action_orders_pub=action_orders_pub, 
+                       distance_interpoint=distance_interpoint, 
+                       margin=margin, 
+                       max_iter=max_iter,
+                       emergency_stop_distance=emergency_stop_distance)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
     rospy.Subscriber(robot_data_topic, RobotData, Nav_node.robot_data_callback)
     rospy.Subscriber(obstacles_topic, Obstacles, Nav_node.obstacles_callback)
-    rospy.Subscriber(next_point_topic, Point, Nav_node.next_point_callback)
     rospy.Subscriber('/robot_x/motion_done', Bool, Nav_node.motion_done_callback)
 
     # Vérification de la présence d'obstacle sur le chemin du robot
