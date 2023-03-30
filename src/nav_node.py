@@ -247,7 +247,7 @@ class NavNode():
     def robot_data_callback(self, msg):
         self.robot_data = msg
         self.position = np.array([msg.position.x, msg.position.y])
-        self.orientation = np.arctan(msg.orientation.y/msg.orientation.x)
+        self.orientation = np.arctan2(msg.orientation.y,msg.orientation.x)
         
         #Arret d'urgence
         pos = self.position
