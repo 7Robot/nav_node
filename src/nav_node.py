@@ -247,18 +247,7 @@ class NavNode():
     def robot_data_callback(self, msg):
         self.robot_data = msg
         self.position = np.array([msg.position.x, msg.position.y])
-        self.orientation = np.arctan2(msg.orientation.y,msg.orientation.x)
-        
-        #Arret d'urgence
-        pos = self.position
-        for r in range(int(self.emergency_stop_distance*100)):
-            for x in range(r):
-                y = r - x
-                if self.is_obstacle(pos[0]+x, pos[1]-y) or self.is_obstacle(pos[0]-x, pos[1]+y):
-                    rospy.logwarn("Obstacle trop proche, ARRET D'URGENCE")
-                    self.path = None
-                    self.next_goal = None
-                    return None
+        self.orientation = msg.position.z        
 
         if self.path:
             if type(self.next_goal) == type(None):
@@ -274,11 +263,31 @@ class NavNode():
                         self.next_goal = self.position + vect * self.distance_interpoint
                     self.publish_pic_msg(self.next_goal)
 
+    def emergency_stop(self):
+        """
+        Stoppe le robot
+        """
+        self.path=[self.position]
+        rospy.logwarn("STOP")
+
     def obstacles_callback(self, msg):
         """
         Callback pour récupérer les obstacles
         """
         
+        # Emergency stop
+        if self.emergency_stop_distance > 0:
+            for obstacle in msg.other_robot_lidar:
+                arr = self.chgt_base_plateau_to_robot(obstacle)
+                if abs(arr[1]) < self.emergency_stop_distance and abs(arr[1]) < self.max_radius/2:
+                    if self.robot_data.linear_velocity > 0: # Le robot va en avant
+                        if arr[0] > 0:
+                            self.emergency_stop()
+                    else:
+                        if arr[0]<0:
+                            self.emergency_stop()
+
+
         ## On récupère les obstacles
         Liste_obstacle = [(obstacle.position.x, obstacle.position.y, self.max_radius) for obstacle in msg.other_robot_lidar]
 
@@ -323,6 +332,14 @@ class NavNode():
     
         pass
         
+    def chgt_base_plateau_to_robot(self, point):
+        cos_angle = np.cos(self.orientation)
+        sin_angle = np.sin(self.orientation)
+        point_transforme_to_robot = np.array([0,0])
+        point_transforme_to_robot[0] = (point.x - self.position[0]) * cos_angle + (point.y - self.position[1]) * sin_angle
+        point_transforme_to_robot[1] = (self.orientation[0] - point.x) * sin_angle + (point.y - self.orientation[1]) * cos_angle
+        return point_transforme_to_robot
+
 if __name__ == '__main__':
     rospy.init_node('navigation_node', anonymous=False)
 
