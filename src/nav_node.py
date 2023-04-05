@@ -12,8 +12,7 @@ class NavNode():
                  max_radius = 0.35, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
-                 emergency_stop_distance = 0, 
-                 simu_mode = False, 
+                 emergency_stop_distance = 0,
                  color = "Green",
                  name_robot = "Han7"):
         self.path = []
@@ -25,9 +24,9 @@ class NavNode():
         rospack = rospkg.RosPack()
         rospack.list()
         if color == "Green":
-            self.map_static_obstacles = np.load("{}/src/maps/green_nostealing.npy".format(rospack.get_path('nav_node')))
+            self.map_static_obstacles = np.load("{}/src/map/green_nostealing.npy".format(rospack.get_path('nav_node')))
         elif color == "Blue":
-            self.map_static_obstacles = np.load("{}/src/maps/blue_nostealing.npy".format(rospack.get_path('nav_node')))
+            self.map_static_obstacles = np.load("{}/src/map/blue_nostealing.npy".format(rospack.get_path('nav_node')))
         else:
             rospy.logerr("Color not recognized")
             exit()
@@ -44,7 +43,6 @@ class NavNode():
         self.emergency_stop_distance = emergency_stop_distance
 
         self.action_orders_pub = action_orders_pub
-        self.simu_mode = False
         self.name_robot = name_robot
 
 
@@ -166,12 +164,13 @@ class NavNode():
 
                 y = r - abs(x)
                 (x_conv, y_conv) = (x*0.01, y*0.01)
-                if not(self.is_obstacle(self.pos[0] + x_conv, self.pos[1] + y_conv)):
-                    escape_point = np.array([self.pos[0] + x_conv, self.pos[1] + y_conv])
-                if not(self.is_obstacle(self.pos[0] + x_conv, self.pos[1] - y_conv)):
-                    escape_point = np.array([self.pos[0] + x_conv, self.pos[1] - y_conv])
+                if not(self.is_obstacle(self.position[0] + x_conv, self.position[1] + y_conv)):
+                    escape_point = np.array([self.position[0] + x_conv, self.position[1] + y_conv])
+                if not(self.is_obstacle(self.position[0] + x_conv, self.position[1] - y_conv)):
+                    escape_point = np.array([self.position[0] + x_conv, self.position[1] - y_conv])
             r += 1
-        self.path = [self.pos, escape_point]
+        self.path = [self.position, escape_point]
+        self.publish_pic_msg(escape_point)
 
     def master_path(self, start, end):
         """
@@ -239,8 +238,10 @@ class NavNode():
         """
         Callback pour récupérer la position cible
         """
-        rospy.logdebug("Position goal : " + str(msg))
-        self.position_goal = [msg.x, msg.y]
+        rospy.loginfo("Position goal : " + str(msg))
+        dist = np.sqrt((msg.x - self.position[0])**2 + (msg.y - self.position[1])**2)
+        if dist > 0.01:
+            self.position_goal = [msg.x, msg.y]
         self.master_path(self.position, self.position_goal)
         
     def publish_pic_msg(self, next_goal):
@@ -252,6 +253,7 @@ class NavNode():
             - path : liste\n
                 Liste ordonnée des noeuds constituant le chemin
         """
+        rospy.loginfo("Next goal : " + str(next_goal))
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'MOVE'
@@ -378,13 +380,11 @@ if __name__ == '__main__':
 
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
-    debug_mode = rospy.get_param('~debug_mode', False)
     max_iter = rospy.get_param('~max_iter', 15)
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     positions_topic = rospy.get_param('~positions_topic', '/robot_1/Odom') 
-    simu_mode = rospy.get_param('~simu_mode', True)
     color = rospy.get_param('~color', 'Green')
     name_robot = rospy.get_param('~name_robot', 'Han7')
 
@@ -397,7 +397,6 @@ if __name__ == '__main__':
                        margin=margin, 
                        max_iter=max_iter,
                        emergency_stop_distance=emergency_stop_distance,
-                       simu_mode=simu_mode,
                        color=color,
                        name_robot=name_robot)
 
