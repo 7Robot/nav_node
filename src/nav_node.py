@@ -1,27 +1,40 @@
 import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
-from cdf_msgs.msg import RobotData, Pic_Action
-from virtual_robot.msg import Virtual_Robot_ActionAction, Virtual_Robot_ActionGoal
+from cdf_msgs.msg import Pic_Action
 from std_msgs.msg import Bool
 import numpy as np
-import actionlib
 
 class NavNode():
-    def __init__(self, action_orders_pub, margin=0.03, pos = np.array([0,0]), max_radius = 0.35, max_iter = 15, distance_interpoint = 0.03, emergency_stop_distance = 0, simu_mode = False):
+    def __init__(self, 
+                 action_orders_pub, margin=0.03, 
+                 pos = np.array([0,0]), 
+                 max_radius = 0.35, 
+                 max_iter = 15, 
+                 distance_interpoint = 0.03, 
+                 emergency_stop_distance = 0, 
+                 simu_mode = False, 
+                 color = "Green"):
         self.path = []
         self.margin = margin
         self.position_goal = None
         self.max_iter = max_iter
 
+
         rospack = rospkg.RosPack()
         rospack.list()
         self.map_static_obstacles = np.load("{}/src/FixedObstacleMap.npy".format(rospack.get_path('nav_node')))
+        if color == "Green":
+            self.map_static_obstacles = np.load("{}/src/maps/green_nostealing.npy".format(rospack.get_path('nav_node')))
+        elif color == "Blue":
+            self.map_static_obstacles = np.load("{}/src/maps/blue_nostealing.npy".format(rospack.get_path('nav_node')))
+        else:
+            rospy.logerr("Color not recognized")
+            exit()
         self.map_obstacles = self.map_static_obstacles.copy()
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
         
-        self.robot_data = RobotData()
         self.position = pos
         self.orientation = 0
 
@@ -242,12 +255,8 @@ class NavNode():
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
         self.action_orders_pub.publish(msg)
 
-        if self.simu_mode:
-            action_client_goal = Virtual_Robot_ActionGoal()
-            action_client_goal.command = msg.action_msg
-            action_client.send_goal(action_client_goal)
         
-    def robot_data_callback(self, msg):
+    def position_callback(self, msg):
         self.robot_data = msg
         self.position = np.array([msg.position.x, msg.position.y])
         self.orientation = msg.position.z        
@@ -354,14 +363,12 @@ if __name__ == '__main__':
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
-    robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_1/Odom')
+    position_topic = rospy.get_param('~robot_data_topic', '/robot_1/Odom') #TODO
     simu_mode = rospy.get_param('~simu_mode', True)
+    color = rospy.get_param('~color', 'Green')
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
-
-    if debug_mode:
-        action_client = actionlib.SimpleActionClient('pic_action', Virtual_Robot_ActionAction)
 
     # Création de la classe NavigationNode
     Nav_node = NavNode(action_orders_pub=action_orders_pub, 
@@ -369,13 +376,13 @@ if __name__ == '__main__':
                        margin=margin, 
                        max_iter=max_iter,
                        emergency_stop_distance=emergency_stop_distance,
-                       simu_mode=simu_mode)
+                       simu_mode=simu_mode,
+                       color=color)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
-    rospy.Subscriber(robot_data_topic, RobotData, Nav_node.robot_data_callback)
+    rospy.Subscriber(position_topic, Point, Nav_node.position_callback)
     rospy.Subscriber(obstacles_topic, Obstacles, Nav_node.obstacles_callback)
-    rospy.Subscriber('/robot_x/motion_done', Bool, Nav_node.motion_done_callback)
 
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
