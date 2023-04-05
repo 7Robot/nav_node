@@ -360,8 +360,8 @@ class NavNode():
         ## On crée une matrice associée à chaque obstacle
         
         for obstacle in liste_obstacle:
-            x_obstacle = obstacle[0]+100
-            y_obstacle = obstacle[1]+100
+            x_obstacle = int(obstacle[0])+100
+            y_obstacle = int(obstacle[1])+100
             rayon_obstacle = int(100*self.max_radius)
 
             # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
