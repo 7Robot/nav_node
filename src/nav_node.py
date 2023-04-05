@@ -395,7 +395,7 @@ if __name__ == '__main__':
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
-    positions_topic = rospy.get_param('~positions_topic', '/robot_1/Odom') 
+    positions_topic = rospy.get_param('~positions_topic', '/robot_1/positions_topic') 
     color = rospy.get_param('~color', 'Green')
     name_robot = rospy.get_param('~name_robot', 'Han7')
 
