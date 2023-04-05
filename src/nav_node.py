@@ -1,7 +1,7 @@
 import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
-from cdf_msgs.msg import Pic_Action
+from cdf_msgs.msg import Pic_Action, MergedData
 from std_msgs.msg import Bool
 import numpy as np
 
@@ -14,7 +14,8 @@ class NavNode():
                  distance_interpoint = 0.03, 
                  emergency_stop_distance = 0, 
                  simu_mode = False, 
-                 color = "Green"):
+                 color = "Green",
+                 name_robot = "Han7"):
         self.path = []
         self.margin = margin
         self.position_goal = None
@@ -35,6 +36,7 @@ class NavNode():
         self.shape_board = self.map_obstacles.shape
         
         self.position = pos
+        self.velocity = np.zeros((1,3))
         self.orientation = 0
 
         self.distance_interpoint = distance_interpoint
@@ -43,6 +45,8 @@ class NavNode():
 
         self.action_orders_pub = action_orders_pub
         self.simu_mode = False
+        self.name_robot = name_robot
+
 
     def find_middle_obstacles(self, path, path_portion : int):
         """
@@ -254,10 +258,39 @@ class NavNode():
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
         self.action_orders_pub.publish(msg)
 
+    def emergency_stop(self):
+        """
+        Stoppe le robot
+        """
+        self.path=[self.position]
+        rospy.logwarn("STOP")
         
     def position_callback(self, msg):
-        self.robot_data = msg
-        self.position = np.array([msg.position.x, msg.position.y])
+        """
+        Callback pour récupérer la position des robots
+        """
+        if self.name_robot == "Han7":
+            self.position = np.array([msg.robot_1.position.x, msg.robot_1.position.y])
+            liste_obstacle = [np.array([msg.robot_2.position.x, msg.robot_2.position.y]),
+                                np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
+                                np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
+            self.orientation = msg.robot_1.position.z
+            self.velocity = np.array([msg.robot_1.vitesse.x, msg.robot_1.vitesse.y, msg.robot_1.vitesse.z])
+
+        elif self.name_robot == "Gret7" :
+            self.position = np.array([msg.robot_2.position.x, msg.robot_2.position.y])
+            liste_obstacle = [np.array([msg.robot_1.position.x, msg.robot_2.position.y]),
+                                np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
+                                np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
+            self.orientation = msg.robot_2.position.z
+            self.velocity = np.array([msg.robot_2.vitesse.x, msg.robot_2.vitesse.y, msg.robot_2.vitesse.z])
+
+        else :
+            rospy.logerr("Nom de robot non reconnu")
+        
+        
+        self.obstacles_processing(liste_obstacle)
+                  
         self.orientation = msg.position.z        
 
         if self.path:
@@ -274,33 +307,25 @@ class NavNode():
                         self.next_goal = self.position + vect * self.distance_interpoint
                     self.publish_pic_msg(self.next_goal)
 
-    def emergency_stop(self):
+    def obstacles_processing(self, liste_obstacle):
         """
-        Stoppe le robot
-        """
-        self.path=[self.position]
-        rospy.logwarn("STOP")
-
-    def obstacles_callback(self, msg):
-        """
-        Callback pour récupérer les obstacles
+        Fonction pour récupérer les obstacles
         """
         
         # Emergency stop
         if self.emergency_stop_distance > 0:
-            for obstacle in msg.other_robot_lidar:
+            for obstacle in liste_obstacle:
                 arr = self.chgt_base_plateau_to_robot(obstacle)
                 if abs(arr[1]) < self.emergency_stop_distance and abs(arr[1]) < self.max_radius/2:
-                    if self.robot_data.linear_velocity > 0: # Le robot va en avant
+                    if self.orientation < np.pi/2 or self.orientation > 3*np.pi/2 : # Le robot va en avant
                         if arr[0] > 0:
                             self.emergency_stop()
+                            rospy.logwarn("STOP")
                     else:
                         if arr[0]<0:
                             self.emergency_stop()
+                            rospy.logwarn("STOP")
 
-
-        ## On récupère les obstacles
-        Liste_obstacle = [(obstacle.position.x, obstacle.position.y, self.max_radius) for obstacle in msg.other_robot_lidar]
 
         ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
         Obstacles_coherents = []
@@ -308,7 +333,7 @@ class NavNode():
         x_plateau = self.board[0]
         y_plateau = self.board[1]
 
-        for obstacle in Liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
+        for obstacle in liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
             if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50) and (obstacle[2]<50):
                 Obstacles_coherents.append(obstacle)
 
@@ -321,7 +346,7 @@ class NavNode():
 
         ## On crée une matrice associée à chaque obstacle
         
-        for obstacle in Liste_obstacle:
+        for obstacle in liste_obstacle:
             x_obstacle = obstacle[0]+100
             y_obstacle = obstacle[1]+100
             rayon_obstacle = obstacle[2]
@@ -338,33 +363,30 @@ class NavNode():
 
         ## On met à jour les informations sur le plateau
         self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
-                 
-        self.next_point = msg
-    
-        pass
+
         
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
         sin_angle = np.sin(self.orientation)
         point_transforme_to_robot = np.array([0,0])
-        point_transforme_to_robot[0] = (point.x - self.position[0]) * cos_angle + (point.y - self.position[1]) * sin_angle
-        point_transforme_to_robot[1] = (self.orientation[0] - point.x) * sin_angle + (point.y - self.orientation[1]) * cos_angle
+        point_transforme_to_robot[0] = (point[0] - self.position[0]) * cos_angle + (point[1] - self.position[1]) * sin_angle
+        point_transforme_to_robot[1] = (self.orientation[0] - point[0]) * sin_angle + (point[1] - self.orientation[1]) * cos_angle
         return point_transforme_to_robot
 
 if __name__ == '__main__':
     rospy.init_node('nav_node', anonymous=False)
 
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
-    obstacles_topic = rospy.get_param('~obstacles_topic', '/obstacles')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
     debug_mode = rospy.get_param('~debug_mode', False)
     max_iter = rospy.get_param('~max_iter', 15)
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
-    position_topic = rospy.get_param('~robot_data_topic', '/robot_1/Odom') #TODO
+    positions_topic = rospy.get_param('~positions_topic', '/robot_1/Odom') 
     simu_mode = rospy.get_param('~simu_mode', True)
     color = rospy.get_param('~color', 'Green')
+    name_robot = rospy.get_param('~name_robot', 'Han7')
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
@@ -376,13 +398,13 @@ if __name__ == '__main__':
                        max_iter=max_iter,
                        emergency_stop_distance=emergency_stop_distance,
                        simu_mode=simu_mode,
-                       color=color)
+                       color=color,
+                       name_robot=name_robot)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
-    rospy.Subscriber(position_topic, Point, Nav_node.position_callback)
-    rospy.Subscriber(obstacles_topic, Obstacles, Nav_node.obstacles_callback)
-
+    rospy.Subscriber(positions_topic, Point, Nav_node.position_callback)
+    
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
 
