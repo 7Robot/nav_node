@@ -1,9 +1,10 @@
 import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
-from cdf_msgs.msg import Pic_Action, MergedData
+from cdf_msgs.msg import Pic_Action, MergedData, Trajectoire
 from std_msgs.msg import Bool
 import numpy as np
+import time
 
 class NavNode():
     def __init__(self, 
@@ -14,11 +15,16 @@ class NavNode():
                  distance_interpoint = 0.03, 
                  emergency_stop_distance = 0,
                  color = "Green",
-                 name_robot = "Han7"):
+                 name_robot = "Han7",
+                 debug = False):
         self.path = []
         self.margin = margin
         self.position_goal = None
         self.max_iter = max_iter
+        self.debug = debug
+
+        if self.debug:
+            self.react_pub = rospy.Publisher('/robot_1/positions_topic', MergedData, queue_size=1)
 
 
         rospack = rospkg.RosPack()
@@ -259,6 +265,12 @@ class NavNode():
         msg.action_msg = 'MOVE'
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
         self.action_orders_pub.publish(msg)
+        if self.debug:
+            msg = MergedData()
+            msg.robot_1 = Trajectoire()
+            msg.robot_1.position = Point(next_goal[0], next_goal[1], 0)
+            rospy.loginfo("[DEBUG] Going to : " + str(msg))
+            self.react_pub.publish(msg)
 
     def emergency_stop(self):
         """
@@ -289,7 +301,6 @@ class NavNode():
 
         else :
             rospy.logerr("Nom de robot non reconnu")
-        
         
         self.obstacles_processing(liste_obstacle)
                   
@@ -332,11 +343,11 @@ class NavNode():
         ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
         Obstacles_coherents = []
 
-        x_plateau = self.board[0]
-        y_plateau = self.board[1]
+        x_plateau = self.shape_board[0]
+        y_plateau = self.shape_board[1]
 
         for obstacle in liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
-            if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50) and (obstacle[2]<50):
+            if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50):
                 Obstacles_coherents.append(obstacle)
 
         ## On crée une aire de jeu plus grande que le plateau pour traiter les obstacles hors du plateau
@@ -351,7 +362,7 @@ class NavNode():
         for obstacle in liste_obstacle:
             x_obstacle = obstacle[0]+100
             y_obstacle = obstacle[1]+100
-            rayon_obstacle = obstacle[2]
+            rayon_obstacle = int(100*self.max_radius)
 
             # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
             carre_rayon = rayon_obstacle**2
@@ -365,17 +376,17 @@ class NavNode():
 
         ## On met à jour les informations sur le plateau
         self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
-
         
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
         sin_angle = np.sin(self.orientation)
         point_transforme_to_robot = np.array([0,0])
         point_transforme_to_robot[0] = (point[0] - self.position[0]) * cos_angle + (point[1] - self.position[1]) * sin_angle
-        point_transforme_to_robot[1] = (self.orientation[0] - point[0]) * sin_angle + (point[1] - self.orientation[1]) * cos_angle
+        point_transforme_to_robot[1] = (self.position[0] - point[0]) * sin_angle + (point[1] - self.position[1]) * cos_angle
         return point_transforme_to_robot
 
 if __name__ == '__main__':
+
     rospy.init_node('nav_node', anonymous=False)
 
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
@@ -398,12 +409,13 @@ if __name__ == '__main__':
                        max_iter=max_iter,
                        emergency_stop_distance=emergency_stop_distance,
                        color=color,
-                       name_robot=name_robot)
+                       name_robot=name_robot,
+                       debug = True)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
-    rospy.Subscriber(positions_topic, Point, Nav_node.position_callback)
-    
+    rospy.Subscriber(positions_topic, MergedData, Nav_node.position_callback)
+
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
 
