@@ -8,13 +8,13 @@ import numpy as np
 import actionlib
 
 class NavNode():
-    def __init__(self, action_orders_pub, margin=0.03, pos = np.array([0,0]), max_radius = 0.35, max_iter = 15, distance_interpoint = 0.03, emergency_stop_distance = 0):
+    def __init__(self, action_orders_pub, margin=0.03, pos = np.array([0,0]), max_radius = 0.35, max_iter = 15, distance_interpoint = 0.03, emergency_stop_distance = 0, simu_mode = False):
         self.path = []
         self.margin = margin
         self.position_goal = None
         self.max_iter = max_iter
 
-        self.map_static_obstacles = np.load("cvmap2.npy")
+        self.map_static_obstacles = np.load("FixedObstacleMap.npy")
         self.map_obstacles = self.map_static_obstacles.copy()
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
@@ -28,6 +28,7 @@ class NavNode():
         self.emergency_stop_distance = emergency_stop_distance
 
         self.action_orders_pub = action_orders_pub
+        self.simu_mode = False
 
     def find_middle_obstacles(self, path, path_portion : int):
         """
@@ -239,7 +240,7 @@ class NavNode():
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
         self.action_orders_pub.publish(msg)
 
-        if debug_mode:
+        if self.simu_mode:
             action_client_goal = Virtual_Robot_ActionGoal()
             action_client_goal.command = msg.action_msg
             action_client.send_goal(action_client_goal)
@@ -341,19 +342,18 @@ class NavNode():
         return point_transforme_to_robot
 
 if __name__ == '__main__':
-    rospy.init_node('navigation_node', anonymous=False)
+    rospy.init_node('nav_node', anonymous=False)
 
-    position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_x/Pos_goal')
+    position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
     obstacles_topic = rospy.get_param('~obstacles_topic', '/obstacles')
-    action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_x/action')
+    action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
     debug_mode = rospy.get_param('~debug_mode', False)
     max_iter = rospy.get_param('~max_iter', 15)
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
-    robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_x/Odom')
-    #robot_x_dimension = rospy.get_param('~robot_x_dimension', 0.5) #m
-    #robot_y_dimension = rospy.get_param('~robot_y_dimension', 0.2) #m
+    robot_data_topic = rospy.get_param('~robot_data_topic', '/robot_1/Odom')
+    simu_mode = rospy.get_param('~simu_mode', True)
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
@@ -366,7 +366,8 @@ if __name__ == '__main__':
                        distance_interpoint=distance_interpoint, 
                        margin=margin, 
                        max_iter=max_iter,
-                       emergency_stop_distance=emergency_stop_distance)
+                       emergency_stop_distance=emergency_stop_distance,
+                       simu_mode=simu_mode)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
