@@ -1,4 +1,4 @@
-import rospy
+import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
 from cdf_msgs.msg import RobotData, Pic_Action
@@ -14,7 +14,9 @@ class NavNode():
         self.position_goal = None
         self.max_iter = max_iter
 
-        self.map_static_obstacles = np.load("FixedObstacleMap.npy")
+        rospack = rospkg.RosPack()
+        rospack.list()
+        self.map_static_obstacles = np.load("{}/src/FixedObstacleMap.npy".format(rospack.get_path('nav_node')))
         self.map_obstacles = self.map_static_obstacles.copy()
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
