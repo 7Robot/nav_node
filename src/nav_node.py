@@ -23,7 +23,6 @@ class NavNode():
 
         rospack = rospkg.RosPack()
         rospack.list()
-        self.map_static_obstacles = np.load("{}/src/FixedObstacleMap.npy".format(rospack.get_path('nav_node')))
         if color == "Green":
             self.map_static_obstacles = np.load("{}/src/maps/green_nostealing.npy".format(rospack.get_path('nav_node')))
         elif color == "Blue":
