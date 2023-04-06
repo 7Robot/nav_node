@@ -179,8 +179,9 @@ class NavNode():
                 if not(self.is_obstacle(self.position[0] + x_conv, self.position[1] - y_conv)):
                     escape_point = np.array([self.position[0] + x_conv, self.position[1] - y_conv])
             r += 1
-        self.path = [self.position, escape_point]
+        self.path = [escape_point]
         self.next_goal = escape_point
+        rospy.loginfo("Point de sortie trouvé : " + str(escape_point))
         self.publish_pic_msg(escape_point)
 
     def master_path(self, start, end):
@@ -221,6 +222,7 @@ class NavNode():
             return None
         else:
             rospy.loginfo("Found path" + str(self.path))
+
 
         self.path = path
 
@@ -269,7 +271,7 @@ class NavNode():
             - path : liste\n
                 Liste ordonnée des noeuds constituant le chemin
         """
-        rospy.loginfo("Next goal : " + str(next_goal))
+        rospy.loginfo("Going to : " + str(next_goal))
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'MOVE'
@@ -324,12 +326,13 @@ class NavNode():
                 rospy.loginfo("Next goal set to : " + str(self.next_goal))
             else:
                 if np.linalg.norm(np.array(self.position) - np.array(self.next_goal)) < self.distance_interpoint:
+                    rospy.loginfo("Advancing in path" + str(self.path))
                     if np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
                         if len(self.path) == 1: # On a atteint la cible
                             rospy.loginfo("Cible atteinte")
                             self.action_done_pub.publish(True)
                             return None
-                            
+                        
                         self.path.pop(0)
                         self.next_goal = self.path[0]
                     else:
