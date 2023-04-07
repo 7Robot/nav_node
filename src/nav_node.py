@@ -36,6 +36,9 @@ class NavNode():
         elif color == "Blue":
             self.static_obstacles = np.load("{}/src/map/blue_nostealing.npy".format(rospack.get_path('nav_node')))
             rospy.loginfo("Blue map loaded")
+        elif color == "Debug":
+            self.static_obstacles = np.load("{}/src/map/debug_map.npy".format(rospack.get_path('nav_node')))
+            rospy.loginfo("Debug map loaded")
         else:
             rospy.logerr("Color not recognized")
             exit()
