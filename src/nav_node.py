@@ -55,6 +55,8 @@ class NavNode():
         self.action_done_pub = action_done_pub
         self.name_robot = name_robot
 
+        self.is_in_obstacle = False
+
 
     def find_middle_obstacles(self, path, path_portion : int):
         """
@@ -166,6 +168,7 @@ class NavNode():
         """
         Get out of the obstacle
         """
+        self.is_in_obstacle = True
         escape_point = None
         r = 1
         while type(escape_point) == type(None):
@@ -207,7 +210,11 @@ class NavNode():
         while path_portion<(len(path)-1) and iter < max_iter:
             iter += 1
             middle = self.find_middle_obstacles(path, path_portion)
-            if middle:
+            if type(middle) == type(None):
+                self.path = [self.position]
+                rospy.logwarn("Pas de trajectoire")
+                return None
+            elif middle:
                 detour = self.find_normal_non_obstacle(middle[0], middle[1])
                 if type(detour) != type(None):
                     path.insert(path_portion+1, detour)
@@ -278,7 +285,7 @@ class NavNode():
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
         self.action_orders_pub.publish(msg)
         if self.debug:
-            time.sleep(2)
+            time.sleep(1)
             msg = MergedData()
             msg.robot_1 = Trajectoire()
             msg.robot_1.position = Point(next_goal[0], next_goal[1], 0)
@@ -331,7 +338,17 @@ class NavNode():
                         if len(self.path) == 1: # On a atteint la cible
                             rospy.loginfo("Cible atteinte")
                             self.action_done_pub.publish(True)
-                            return None
+                            if self.is_in_obstacle:
+                                self.is_in_obstacle = False
+                                if self.is_obstacle(self.position[0], self.position[1]):
+                                    self.get_out_of_obstacle()
+                                    rospy.loginfo("Sortie de l'obstacle")
+                                else:
+                                    rospy.loginfo("Recherche du chemin vers "+str(self.position_goal))
+                                    self.master_path(self.position, self.position_goal)
+                            else:
+                                rospy.loginfo("Fin du chemin")
+                                return None
                         
                         self.path.pop(0)
                         self.next_goal = self.path[0]
