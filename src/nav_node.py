@@ -318,61 +318,63 @@ class NavNode():
         """
         Callback pour récupérer la position des robots
         """
-        if self.name_robot == "Han7":
-            self.position = np.array([msg.robot_1.position.x, msg.robot_1.position.y])
-            liste_obstacle = [np.array([msg.robot_2.position.x, msg.robot_2.position.y]),
-                                np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
-                                np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
-            self.orientation = msg.robot_1.position.z
-            self.velocity = np.array([msg.robot_1.vitesse.x, msg.robot_1.vitesse.y, msg.robot_1.vitesse.z])
+        if type(self.position_goal) != type(None):
+            if self.name_robot == "Han7":
+                self.position = np.array([msg.robot_1.position.x, msg.robot_1.position.y])
+                liste_obstacle = [np.array([msg.robot_2.position.x, msg.robot_2.position.y]),
+                                    np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
+                                    np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
+                self.orientation = msg.robot_1.position.z
+                self.velocity = np.array([msg.robot_1.vitesse.x, msg.robot_1.vitesse.y, msg.robot_1.vitesse.z])
 
-        elif self.name_robot == "Gret7" :
-            self.position = np.array([msg.robot_2.position.x, msg.robot_2.position.y])
-            liste_obstacle = [np.array([msg.robot_1.position.x, msg.robot_2.position.y]),
-                                np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
-                                np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
-            self.orientation = msg.robot_2.position.z
-            self.velocity = np.array([msg.robot_2.vitesse.x, msg.robot_2.vitesse.y, msg.robot_2.vitesse.z])
+            elif self.name_robot == "Gret7" :
+                self.position = np.array([msg.robot_2.position.x, msg.robot_2.position.y])
+                liste_obstacle = [np.array([msg.robot_1.position.x, msg.robot_2.position.y]),
+                                    np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
+                                    np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
+                self.orientation = msg.robot_2.position.z
+                self.velocity = np.array([msg.robot_2.vitesse.x, msg.robot_2.vitesse.y, msg.robot_2.vitesse.z])
 
-        else :
-            rospy.logerr("Nom de robot non reconnu")
-        
-        #rospy.loginfo("Position : " + str(self.position))
-        
-        self.obstacles_processing(liste_obstacle)     
+            else :
+                rospy.logerr("Nom de robot non reconnu")
+            
+            #rospy.loginfo("Position : " + str(self.position))
+            
+            self.obstacles_processing(liste_obstacle)     
 
-        if self.path:
-            if type(self.next_goal) == type(None):
-                vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
-                self.next_goal = np.array(self.position) + vect * self.distance_interpoint
-                rospy.loginfo("Path : " + str(self.path))
-                rospy.loginfo("Next goal set to : " + str(self.next_goal))
-            else:
-                if np.linalg.norm(np.array(self.position) - np.array(self.next_goal)) < self.distance_interpoint:
-                    rospy.loginfo("Advancing in path" + str(self.path))
-                    if np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
-                        if len(self.path) == 1: # On a atteint la cible
-                            rospy.loginfo("Cible atteinte")
-                            self.action_done_pub.publish(True)
-                            if self.is_in_obstacle:
-                                self.is_in_obstacle = False
-                                if self.is_obstacle(self.position[0], self.position[1]):
-                                    self.get_out_of_obstacle()
-                                    rospy.loginfo("Sortie de l'obstacle")
-                                else:
-                                    rospy.loginfo("Recherche du chemin vers "+str(self.position_goal))
-                                    self.master_path(self.position, self.position_goal)
-                            else:
-                                rospy.loginfo("Fin du chemin")
-                                return None
-                        
-                        self.path.pop(0)
-                        self.next_goal = self.path[0]
-                    else:
-                        vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
-                        self.next_goal = self.position + vect * self.distance_interpoint
-                    self.publish_pic_msg(self.next_goal)
+            if self.path:
+                if type(self.next_goal) == type(None):
+                    vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
+                    self.next_goal = np.array(self.position) + vect * self.distance_interpoint
+                    rospy.loginfo("Path : " + str(self.path))
                     rospy.loginfo("Next goal set to : " + str(self.next_goal))
+                else:
+                    if np.linalg.norm(np.array(self.position) - np.array(self.next_goal)) < self.distance_interpoint:
+                        rospy.loginfo("Advancing in path" + str(self.path))
+                        if np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
+                            if len(self.path) == 1: # On a atteint la cible
+                                rospy.loginfo("Cible atteinte")
+                                self.action_done_pub.publish(True)
+                                if self.is_in_obstacle:
+                                    self.is_in_obstacle = False
+                                    if self.is_obstacle(self.position[0], self.position[1]):
+                                        self.get_out_of_obstacle()
+                                        rospy.loginfo("Sortie de l'obstacle")
+                                    else:
+                                        rospy.loginfo("Recherche du chemin vers "+str(self.position_goal))
+                                        self.master_path(self.position, self.position_goal)
+                                else:
+                                    self.position_goal = None
+                                    rospy.loginfo("Fin du chemin")
+                                    return None
+                            
+                            self.path.pop(0)
+                            self.next_goal = self.path[0]
+                        else:
+                            vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
+                            self.next_goal = self.position + vect * self.distance_interpoint
+                        self.publish_pic_msg(self.next_goal)
+                        rospy.loginfo("Next goal set to : " + str(self.next_goal))
 
     def obstacles_processing(self, liste_obstacle):
         """
