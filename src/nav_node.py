@@ -3,6 +3,12 @@ from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
 from cdf_msgs.msg import Pic_Action, MergedData, Trajectoire
 from std_msgs.msg import Bool
+from visualization_msgs.msg import MarkerArray, Marker
+from tool_lidar.objet import ChooseColor
+
+
+import tool_lidar.variable_globale as tool_glob
+import tool_lidar.publisher as tool_pub
 import numpy as np
 import time
 
@@ -18,6 +24,7 @@ class NavNode():
                  color = "Green",
                  name_robot = "Han7",
                  debug = False):
+        self.pub_marker = rospy.Publisher(rospy.get_param("~pub_marker_next_pos", "/robot_1/marker_next_pos"), MarkerArray, queue_size = 10)
         self.path = []
         self.margin = margin
         self.position_goal = None
@@ -267,6 +274,11 @@ class NavNode():
         if dist > 0.01: # Si la position cible est trop loin
             self.position_goal = [msg.x, msg.y]
             rospy.loginfo("Cible atteinte")
+            # color = ChooseColor(0, 1, 0)
+            # marker_array = MarkerArray()
+            # marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15) 
+            # marker_array.markers.append(marker_pos_other)
+            # self.pub_marker.publish(marker_array)
             self.master_path(self.position, self.position_goal)
         else : # La cible est proche
             self.position_goal = self.position
@@ -286,6 +298,7 @@ class NavNode():
         msg.action_destination = 'motor'
         msg.action_msg = 'MOVE'
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
+
         self.action_orders_pub.publish(msg)
         if self.debug:
             time.sleep(1)
@@ -324,7 +337,7 @@ class NavNode():
         else :
             rospy.logerr("Nom de robot non reconnu")
         
-        rospy.loginfo("Position : " + str(self.position))
+        #rospy.loginfo("Position : " + str(self.position))
         
         self.obstacles_processing(liste_obstacle)     
 
@@ -366,7 +379,7 @@ class NavNode():
         Fonction pour récupérer les obstacles
         """
         
-        # Emergency stop
+        # Emergency stop, le mettre à 0 désactive l'arret d'urgence
         if self.emergency_stop_distance > 0:
             for obstacle in liste_obstacle:
                 arr = self.chgt_base_plateau_to_robot(obstacle)
@@ -453,7 +466,7 @@ if __name__ == '__main__':
                        emergency_stop_distance=emergency_stop_distance,
                        color=color,
                        name_robot=name_robot,
-                       debug = True,
+                       debug = False,
                        action_done_pub=action_done_pub)
 
     # Déclaration des Subscribers
