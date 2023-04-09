@@ -473,7 +473,7 @@ if __name__ == '__main__':
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     positions_topic = rospy.get_param('~positions_topic', '/robot_1/positions_topic') 
     color = rospy.get_param('~color', 'Green')
-    debug_mode = rospy.get_param('~debug_mode', True')
+    debug_mode = rospy.get_param('~debug_mode', True)
     name_robot = rospy.get_param('~name_robot', 'Han7')
 
     # Déclaration des Publishers
@@ -488,7 +488,7 @@ if __name__ == '__main__':
                        emergency_stop_distance=emergency_stop_distance,
                        color=color,
                        name_robot=name_robot,
-                       debug = True,
+                       debug = debug_mode,
                        action_done_pub=action_done_pub)
 
     # Déclaration des Subscribers
