@@ -32,7 +32,7 @@ class NavNode():
         self.debug = debug
 
         if self.debug:
-            self.react_pub = rospy.Publisher('/robot_1/positions_topic', MergedData, queue_size=1)
+            self.react_pub = rospy.Publisher('/merged_datas', MergedData, queue_size=1)
 
 
         rospack = rospkg.RosPack()
@@ -67,14 +67,18 @@ class NavNode():
 
         self.is_in_obstacle = False
 
-
     def find_middle_obstacles(self, path, path_portion : int):
         """
         Find the beginning and the end of the obstacle in the path portion
 
         Parameters
         ----------
-        path_portion : int Portion de 
+        path_portion : int Portion de chemin
+
+        Returns
+        -------
+        (start_obstacle, end_obstacle) : tuple
+        False if no obstacle
 
         """
         start = np.array(path[path_portion])
@@ -234,12 +238,13 @@ class NavNode():
             else:
                 path_portion += 1
 
+
+        path.pop(0)
         if iter == max_iter:
             rospy.logwarn("Trop d'itération :" + str(max_iter) + " itérations")
             return None
         else:
-            rospy.loginfo("Found path" + str(self.path))
-
+            rospy.loginfo("Found path" + str(path))
 
         self.path = path
 
@@ -262,6 +267,21 @@ class NavNode():
                 self.master_path(self.position, self.position_goal)
                 return None
 
+    def get_next_pos(self):
+        """
+        Get the next position to go and store it in self.next_goal
+        """
+        if len(self.path) >= 1:
+            v1 = np.array(self.path[0]) - np.array(self.position)
+            vect = v1/np.linalg.norm(v1)
+            self.next_goal = np.array(self.position) + vect * self.distance_interpoint
+            rospy.loginfo("Next goal set to : " + str(self.next_goal))
+        else:
+            rospy.logwarn("Pas de chemin")
+        return self.next_goal
+        
+            
+
     # Callbacks
     # ---------------------------------------------------------------------------------------------
 
@@ -273,7 +293,6 @@ class NavNode():
         dist = np.sqrt((msg.x - self.position[0])**2 + (msg.y - self.position[1])**2)
         if dist > 0.01: # Si la position cible est trop loin
             self.position_goal = [msg.x, msg.y]
-            rospy.loginfo("Cible atteinte")
             # color = ChooseColor(0, 1, 0)
             # marker_array = MarkerArray()
             # marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15) 
@@ -281,6 +300,7 @@ class NavNode():
             # self.pub_marker.publish(marker_array)
             self.master_path(self.position, self.position_goal)
         else : # La cible est proche
+            rospy.loginfo("Cible atteinte")
             self.position_goal = self.position
             self.path = [self.position]
         
@@ -305,6 +325,7 @@ class NavNode():
             msg = MergedData()
             msg.robot_1 = Trajectoire()
             msg.robot_1.position = Point(next_goal[0], next_goal[1], 0)
+            rospy.loginfo("[DEBUG] Publishing : " + str(Point(next_goal[0], next_goal[1], 0)))
             self.react_pub.publish(msg)
 
     def emergency_stop(self):
@@ -326,7 +347,6 @@ class NavNode():
                                     np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
                 self.orientation = msg.robot_1.position.z
                 self.velocity = np.array([msg.robot_1.vitesse.x, msg.robot_1.vitesse.y, msg.robot_1.vitesse.z])
-
             elif self.name_robot == "Gret7" :
                 self.position = np.array([msg.robot_2.position.x, msg.robot_2.position.y])
                 liste_obstacle = [np.array([msg.robot_1.position.x, msg.robot_2.position.y]),
@@ -334,47 +354,46 @@ class NavNode():
                                     np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
                 self.orientation = msg.robot_2.position.z
                 self.velocity = np.array([msg.robot_2.vitesse.x, msg.robot_2.vitesse.y, msg.robot_2.vitesse.z])
-
             else :
                 rospy.logerr("Nom de robot non reconnu")
             
-            #rospy.loginfo("Position : " + str(self.position))
+            rospy.loginfo("Position : " + str(self.position))
             
             self.obstacles_processing(liste_obstacle)     
 
             if self.path:
                 if type(self.next_goal) == type(None):
-                    vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
-                    self.next_goal = np.array(self.position) + vect * self.distance_interpoint
-                    rospy.loginfo("Path : " + str(self.path))
-                    rospy.loginfo("Next goal set to : " + str(self.next_goal))
+
+                    self.get_next_pos()
                 else:
                     if np.linalg.norm(np.array(self.position) - np.array(self.next_goal)) < self.distance_interpoint:
-                        rospy.loginfo("Advancing in path" + str(self.path))
-                        if np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
-                            if len(self.path) == 1: # On a atteint la cible
-                                rospy.loginfo("Cible atteinte")
-                                self.action_done_pub.publish(True)
-                                if self.is_in_obstacle:
-                                    self.is_in_obstacle = False
-                                    if self.is_obstacle(self.position[0], self.position[1]):
-                                        self.get_out_of_obstacle()
-                                        rospy.loginfo("Sortie de l'obstacle")
-                                    else:
-                                        rospy.loginfo("Recherche du chemin vers "+str(self.position_goal))
-                                        self.master_path(self.position, self.position_goal)
+                        # Si on est assez proche du point suivant
+                        if len(self.path) == 0: # On a atteint la cible
+                            rospy.loginfo("Cible atteinte")
+                            self.action_done_pub.publish(True)
+                            if self.is_in_obstacle:
+                                self.is_in_obstacle = False
+                                if self.is_obstacle(self.position[0], self.position[1]):
+                                    self.get_out_of_obstacle()
+                                    rospy.loginfo("Sortie de l'obstacle")
                                 else:
-                                    self.position_goal = None
-                                    rospy.loginfo("Fin du chemin")
-                                    return None
-                            
-                            self.path.pop(0)
-                            self.next_goal = self.path[0]
+                                    rospy.loginfo("Recherche du chemin vers "+str(self.position_goal))
+                                    self.master_path(self.position, self.position_goal)
+                            else:
+                                self.position_goal = None
+                                rospy.loginfo("Fin du chemin")
+                                return None
+                        elif np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
+                            # Si on est assez proche du point de chemin suivant
+                            rospy.loginfo("Advancing in path" + str(self.path))
+                            self.next_goal = self.path.pop(0)
                         else:
-                            vect = np.array(self.path[1]) - np.array(self.position)/np.linalg.norm(np.array(self.path[1]) - np.array(self.position))
-                            self.next_goal = self.position + vect * self.distance_interpoint
-                        self.publish_pic_msg(self.next_goal)
-                        rospy.loginfo("Next goal set to : " + str(self.next_goal))
+                            self.get_next_pos()
+                    else:
+                        self.get_next_pos()
+                self.publish_pic_msg(self.next_goal)
+        else:
+            rospy.loginfo("Cible non définie")
 
     def obstacles_processing(self, liste_obstacle):
         """
@@ -454,6 +473,7 @@ if __name__ == '__main__':
     emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     positions_topic = rospy.get_param('~positions_topic', '/robot_1/positions_topic') 
     color = rospy.get_param('~color', 'Green')
+    debug_mode = rospy.get_param('~debug_mode', True')
     name_robot = rospy.get_param('~name_robot', 'Han7')
 
     # Déclaration des Publishers
@@ -468,7 +488,7 @@ if __name__ == '__main__':
                        emergency_stop_distance=emergency_stop_distance,
                        color=color,
                        name_robot=name_robot,
-                       debug = False,
+                       debug = True,
                        action_done_pub=action_done_pub)
 
     # Déclaration des Subscribers
