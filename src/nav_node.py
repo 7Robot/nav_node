@@ -96,6 +96,12 @@ class NavNode():
         
         if index_in_disc == len(discretisation) - 1:
             return False
+        elif index_in_disc == 0:
+            #l'obstacle se trouve à l'index 0, nous sommes dans un obstacle
+            start_obstacle = discretisation[0]
+        else:
+            #On a trouvé un obstacle
+            start_obstacle = discretisation[index_in_disc-1]
         
         start_obstacle = discretisation[index_in_disc]
 
@@ -137,6 +143,7 @@ class NavNode():
             self.map_obstacle: map
             self.margin: margin around the obstacle
         """
+        rospy.loginfo("Recherche d'un détour à partir de l'obstacle {} {}".format(start, end))
 
         vect_obstacle = np.array(end) - np.array(start)
 
@@ -168,7 +175,7 @@ class NavNode():
                 if not(self.is_obstacle(middle_inf_decal[0], middle_inf_decal[1])):
                     return middle_inf - self.margin * vec_norm * 100
                 else:
-                    rospy.logwarn("ATTENTION : Chemin étroit")
+                    rospy.logwarn("ATTENTION : Chemin étroit trouvé en ")
                     return middle_inf
             else:
                 middle_sup_decal = middle_sup + self.margin * vec_norm * 100
@@ -230,6 +237,7 @@ class NavNode():
                 return None
             elif middle:
                 detour = self.find_normal_non_obstacle(middle[0], middle[1])
+                rospy.loginfo("Detour trouvé : " + str(detour))
                 if type(detour) != type(None):
                     path.insert(path_portion+1, detour)
                 else:
