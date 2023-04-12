@@ -324,10 +324,14 @@ class NavNode():
         rospy.loginfo("Going to : " + str(next_goal))
         msg = Pic_Action()
         msg.action_destination = 'motor'
-        msg.action_msg = 'MOVE'
+        msg.action_msg = 'moveavant'
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
 
         self.action_orders_pub.publish(msg)
+        marker_arr = MarkerArray()
+        marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/base")
+        marker_arr.markers.append(marker)
+        pub_marker.publish(marker_arr)
         if self.debug:
             time.sleep(1)
             msg = MergedData()
@@ -367,7 +371,7 @@ class NavNode():
             else :
                 rospy.logerr("Nom de robot non reconnu")
             
-            rospy.loginfo("Position : " + str(self.position))
+            rospy.loginfo("Path : " + str(self.path))
             
             self.obstacles_processing(liste_obstacle)     
 
@@ -473,7 +477,7 @@ class NavNode():
 if __name__ == '__main__':
 
     rospy.init_node('nav_node', anonymous=False)
-
+    pub_marker = rospy.Publisher(rospy.get_param("~pub_marker_other", "/robot_1/marker_obs"), MarkerArray, queue_size = 10)
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
     action_done_topic = rospy.get_param('~action_done_topic', '/robot_1/action_done')
