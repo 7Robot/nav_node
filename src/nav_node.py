@@ -333,6 +333,8 @@ class NavNode():
             msg = MergedData()
             msg.robot_1 = Trajectoire()
             msg.robot_1.position = Point(next_goal[0], next_goal[1], 0)
+            msg.robot_2 = Trajectoire()
+            msg.robot_2.position = Point(1, 1, 0)
             rospy.loginfo("[DEBUG] Publishing : " + str(Point(next_goal[0], next_goal[1], 0)))
             self.react_pub.publish(msg)
 
