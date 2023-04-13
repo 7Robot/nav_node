@@ -65,6 +65,9 @@ class NavNode():
         self.action_done_pub = action_done_pub
         self.name_robot = name_robot
 
+        # Contain the list of the obstacles (valeurs initiales aberrantes)
+        self.obstacles = np.array([-255 for _ in range(6)])
+
         self.is_in_obstacle = False
 
     def find_middle_obstacles(self, path, path_portion : int):
@@ -288,6 +291,17 @@ class NavNode():
             rospy.logwarn("Pas de chemin")
         return self.next_goal
         
+    def obstacle_variation(self, liste_obstacle):
+        """
+        Check if the obstacle list has changed and return a boolean
+        """
+        if len(liste_obstacle) != len(self.obstacles):
+            return True
+        else:
+            for i in range(len(liste_obstacle)):
+                if liste_obstacle[i] != self.obstacles[i]:
+                    return True
+        return False
             
 
     # Callbacks
@@ -333,7 +347,7 @@ class NavNode():
         marker_arr.markers.append(marker)
         pub_marker.publish(marker_arr)
         if self.debug:
-            time.sleep(1)
+            time.sleep(0.01)
             msg = MergedData()
             msg.robot_1 = Trajectoire()
             msg.robot_1.position = Point(next_goal[0], next_goal[1], 0)
@@ -428,44 +442,56 @@ class NavNode():
                             self.emergency_stop()
                             rospy.logwarn("STOP")
 
+        # Convert to cm
+        liste_obstacle = np.array([obstacle*100 for obstacle in liste_obstacle])
 
-        ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
-        Obstacles_coherents = []
+        if self.obstacle_variation(np.reshape(liste_obstacle,(6))):
+            
+            rospy.loginfo("Obstacle variation")
 
-        x_plateau = self.shape_board[0]
-        y_plateau = self.shape_board[1]
+            self.obstacles = np.reshape(liste_obstacle,(6))
 
-        for obstacle in liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
-            if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50):
-                Obstacles_coherents.append(obstacle)
+            ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
+            Obstacles_coherents = []
 
-        ## On crée une aire de jeu plus grande que le plateau pour traiter les obstacles hors du plateau
+            x_plateau = self.shape_board[0]
+            y_plateau = self.shape_board[1]
 
-        x_plateau_max = x_plateau + 200                    # On rajoute 100cm de marge sur chaque côté
-        y_plateau_max = y_plateau + 200
+            for obstacle in liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
+                if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50):
+                    Obstacles_coherents.append(obstacle)
 
-        Cadrillage_max = np.zeros((x_plateau_max, y_plateau_max))
+            ## On crée une aire de jeu plus grande que le plateau pour traiter les obstacles hors du plateau
 
-        ## On crée une matrice associée à chaque obstacle
-        
-        for obstacle in liste_obstacle:
-            x_obstacle = int(obstacle[0])+100
-            y_obstacle = int(obstacle[1])+100
-            rayon_obstacle = int(100*self.max_radius)
+            x_plateau_max = x_plateau + 200                    # On rajoute 100cm de marge sur chaque côté
+            y_plateau_max = y_plateau + 200
 
-            # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
-            carre_rayon = rayon_obstacle**2
-            M_obstacle = ((np.arange(2*rayon_obstacle)-rayon_obstacle)**2+((np.arange(2*rayon_obstacle)-rayon_obstacle)**2).reshape(2*rayon_obstacle,1)<=carre_rayon).astype(int)
+            Cadrillage_max = np.zeros((x_plateau_max, y_plateau_max))
 
-            # On place la matrice dans la matrice Cadrillage_max aux bonnes coordonnées
-            Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle]= np.logical_or(Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle],M_obstacle)
+            ## On crée une matrice associée à chaque obstacle
+            
+            for obstacle in liste_obstacle:
+                x_obstacle = int(obstacle[0])+100
+                y_obstacle = int(obstacle[1])+100
+                rayon_obstacle = int(100*self.max_radius)
 
-        ## On crée une matrice associée au plateau
-        Cadrillage_rempli = Cadrillage_max[100:x_plateau_max-100,100:y_plateau+100]
+                # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
+                carre_rayon = rayon_obstacle**2
+                M_obstacle = ((np.arange(2*rayon_obstacle)-rayon_obstacle)**2+((np.arange(2*rayon_obstacle)-rayon_obstacle)**2).reshape(2*rayon_obstacle,1)<=carre_rayon).astype(int)
 
-        ## On met à jour les informations sur le plateau
-        self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
-        
+                # On place la matrice dans la matrice Cadrillage_max aux bonnes coordonnées
+                Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle]= np.logical_or(Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle],M_obstacle)
+
+            ## On crée une matrice associée au plateau
+            Cadrillage_rempli = Cadrillage_max[100:x_plateau_max-100,100:y_plateau+100]
+
+            ## On met à jour les informations sur le plateau
+            self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
+            
+            # On met à jour le chemin
+            if self.position_goal is not None:
+                self.master_path(self.position, self.position_goal)
+
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
         sin_angle = np.sin(self.orientation)
