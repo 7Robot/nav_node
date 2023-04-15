@@ -114,7 +114,7 @@ class NavNode():
             (x, y) = (discretisation[index_in_disc, 0], discretisation[index_in_disc, 1])
         
         if index_in_disc == len(discretisation) - 1:
-            rospy.logwarn("Obstacle non fermé")
+            #rospy.logwarn("Obstacle non fermé")
             return None
         else:
             end_obstacle = discretisation[index_in_disc]
@@ -208,7 +208,7 @@ class NavNode():
             r += 1
         self.path = [escape_point]
         self.next_goal = escape_point
-        rospy.loginfo("Point de sortie trouvé : " + str(escape_point))
+        #rospy.loginfo("Point de sortie trouvé : " + str(escape_point))
         self.publish_pic_msg(escape_point)
 
     def master_path(self, start, end):
@@ -286,9 +286,9 @@ class NavNode():
             v1 = np.array(self.path[0]) - np.array(self.position)
             vect = v1/np.linalg.norm(v1)
             self.next_goal = np.array(self.position) + vect * self.distance_interpoint
-            rospy.loginfo("Next goal set to : " + str(self.next_goal))
+            #rospy.loginfo("Next goal set to : " + str(self.next_goal))
         else:
-            rospy.logwarn("Pas de chemin")
+            #rospy.logwarn("Pas de chemin")
         return self.next_goal
         
     def obstacle_variation(self, liste_obstacle):
@@ -335,7 +335,7 @@ class NavNode():
             - path : liste\n
                 Liste ordonnée des noeuds constituant le chemin
         """
-        rospy.loginfo("Going to : " + str(next_goal))
+        #rospy.loginfo("Going to : " + str(next_goal))
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'moveavant'
@@ -343,7 +343,10 @@ class NavNode():
 
         self.action_orders_pub.publish(msg)
         marker_arr = MarkerArray()
-        marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/base")
+        if self.name_robot == "Han7":
+            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/base")
+        else:
+            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_2/base")
         marker_arr.markers.append(marker)
         pub_marker.publish(marker_arr)
         if self.debug:
@@ -353,7 +356,7 @@ class NavNode():
             msg.robot_1.position = Point(next_goal[0], next_goal[1], 0)
             msg.robot_2 = Trajectoire()
             msg.robot_2.position = Point(1, 1, 0)
-            rospy.loginfo("[DEBUG] Publishing : " + str(Point(next_goal[0], next_goal[1], 0)))
+            #rospy.loginfo("[DEBUG] Publishing : " + str(Point(next_goal[0], next_goal[1], 0)))
             self.react_pub.publish(msg)
 
     def emergency_stop(self):
@@ -385,7 +388,7 @@ class NavNode():
             else :
                 rospy.logerr("Nom de robot non reconnu")
             
-            rospy.loginfo("Path : " + str(self.path))
+            #rospy.loginfo("Path : " + str(self.path))
             
             self.obstacles_processing(liste_obstacle)     
 
@@ -447,7 +450,7 @@ class NavNode():
 
         if self.obstacle_variation(np.reshape(liste_obstacle,(6))):
             
-            rospy.loginfo("Obstacle variation")
+            #rospy.loginfo("Obstacle variation")
 
             self.obstacles = np.reshape(liste_obstacle,(6))
 
@@ -470,7 +473,7 @@ class NavNode():
 
             ## On crée une matrice associée à chaque obstacle
             
-            for obstacle in liste_obstacle:
+            for obstacle in Obstacles_coherents: 
                 x_obstacle = int(obstacle[0])+100
                 y_obstacle = int(obstacle[1])+100
                 rayon_obstacle = int(100*self.max_radius)
