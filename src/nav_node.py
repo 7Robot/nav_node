@@ -23,13 +23,15 @@ class NavNode():
                  emergency_stop_distance = 0,
                  color = "Green",
                  name_robot = "Han7",
-                 debug = False):
+                 debug = False,
+                 activation_topic = "/robot_1/activation_nav_node",):
         self.pub_marker = rospy.Publisher(rospy.get_param("~pub_marker_next_pos", "/robot_1/marker_next_pos"), MarkerArray, queue_size = 10)
         self.path = []
         self.margin = margin
         self.position_goal = None
         self.max_iter = max_iter
         self.debug = debug
+        self.activate = True
 
         if self.debug:
             self.react_pub = rospy.Publisher('/merged_datas', MergedData, queue_size=1)
@@ -64,6 +66,7 @@ class NavNode():
         self.action_orders_pub = action_orders_pub
         self.action_done_pub = action_done_pub
         self.name_robot = name_robot
+        self.activation_sub = rospy.Subscriber(activation_topic, Bool, self.activation_callback)
 
         # Contain the list of the obstacles (valeurs initiales aberrantes)
         self.obstacles = np.array([-255 for _ in range(6)])
@@ -257,6 +260,7 @@ class NavNode():
         else:
             #
             #rospy.loginfo("Found path" + str(path))
+            pass
 
         self.path = path
 
@@ -338,6 +342,10 @@ class NavNode():
                 Liste ordonnée des noeuds constituant le chemin
         """
         #rospy.loginfo("Going to : " + str(next_goal))
+        if not(self.activate): # Si le nav_node n'est pas activé
+            return None
+        
+
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'moveavant'
@@ -506,6 +514,9 @@ class NavNode():
         point_transforme_to_robot[1] = (self.position[0] - point[0]) * sin_angle + (point[1] - self.position[1]) * cos_angle
         return point_transforme_to_robot
 
+    def activation_callback(self, msg):
+        self.activation = msg.data
+
 if __name__ == '__main__':
 
     rospy.init_node('nav_node', anonymous=False)
@@ -521,6 +532,7 @@ if __name__ == '__main__':
     color = rospy.get_param('~color', 'Green')
     debug_mode = rospy.get_param('~debug_mode', True)
     name_robot = rospy.get_param('~name_robot', 'Han7')
+    activate_topic = rospy.get_param('~activate_topic', '/robot_1/activation_nav_node')
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
