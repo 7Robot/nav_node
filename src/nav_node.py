@@ -217,9 +217,9 @@ class NavNode():
         """
 
         if self.is_obstacle(start[0], start[1]) or self.is_obstacle(end[0], end[1]):
-            rospy.logwarn("Départ ou arrivée dans un obstacle")
+            # rospy.logwarn("Départ ou arrivée dans un obstacle")
             if self.is_obstacle(start[0], start[1]):
-                rospy.logwarn("Départ dans un obstacle, on le quitte")
+                # rospy.logwarn("Départ dans un obstacle, on le quitte")
                 self.get_out_of_obstacle()
                 return None
 
@@ -255,7 +255,8 @@ class NavNode():
             rospy.logwarn("Trop d'itération :" + str(max_iter) + " itérations")
             return None
         else:
-            rospy.loginfo("Found path" + str(path))
+            #
+            #rospy.loginfo("Found path" + str(path))
 
         self.path = path
 
@@ -288,6 +289,7 @@ class NavNode():
             self.next_goal = np.array(self.position) + vect * self.distance_interpoint
             #rospy.loginfo("Next goal set to : " + str(self.next_goal))
         else:
+            pass
             #rospy.logwarn("Pas de chemin")
         return self.next_goal
         
@@ -388,7 +390,7 @@ class NavNode():
             else :
                 rospy.logerr("Nom de robot non reconnu")
             
-            #rospy.loginfo("Path : " + str(self.path))
+            rospy.loginfo("Path : " + str(self.path))
             
             self.obstacles_processing(liste_obstacle)     
 
@@ -422,7 +424,8 @@ class NavNode():
                             self.get_next_pos()
                     else:
                         self.get_next_pos()
-                self.publish_pic_msg(self.next_goal)
+                if len(self.path != 0):       
+                    self.publish_pic_msg(self.next_goal)
         else:
             rospy.loginfo("Cible non définie")
 
