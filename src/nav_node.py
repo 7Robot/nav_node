@@ -304,8 +304,12 @@ class NavNode():
         if len(liste_obstacle) != len(self.obstacles):
             return True
         else:
-            for i in range(len(liste_obstacle)):
-                if liste_obstacle[i] != self.obstacles[i]:
+            for prev_obs in self.obstacles:
+                b=True
+                for obs in liste_obstacle:
+                    #Trigger distance = 0.03
+                    b = b and np.linalg.norm(np.array(obs) - np.array(prev_obs)) > 0.03
+                if b: # Aucun des nouveaux obstacles n'est proche de cet ancien
                     return True
         return False
             
