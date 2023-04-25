@@ -9,6 +9,8 @@ Dans la grande majorité des cas, le chemin le plus court entre deux points est 
 * Deuxième étape : On vérifie pour chaque point sur le chemin si il y a collision avec un obstacle sur le chemin.
   
 * Si il y a collision, on place un point sur la normale à la trajectoire à mi-chemin entre le début et la fin de l'obstacle.
+![Exemple d'uitlisation](https://zupimages.net/up/23/17/ouxn.png "3 points")
+
   
 * On recommence tant que le chemin est obstrué sur une portion
 
