@@ -445,7 +445,8 @@ class NavNode():
             else:
                 self.position = old_position
         else:
-            rospy.loginfo("Cible non définie")
+            pass 
+            # rospy.loginfo("Cible non définie")
 
     def obstacles_processing(self, liste_obstacle):
         """
