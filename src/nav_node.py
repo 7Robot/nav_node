@@ -407,7 +407,7 @@ class NavNode():
                 rospy.logerr("Nom de robot non reconnu")
             
             # Do not send another goal if the robot too close to the old position
-            if np.norm(self.position - old_position) > self.distance_interpoint/2:
+            if np.linalg.norm(self.position - old_position) > self.distance_interpoint/2:
                 rospy.loginfo("Path : " + str(self.path))
                 
                 self.obstacles_processing(liste_obstacle)     
@@ -442,7 +442,7 @@ class NavNode():
                                 self.get_next_pos()
                         else:
                             self.get_next_pos()
-                    if len(self.path != 0):       
+                    if len(self.path) != 0:       
                         self.publish_pic_msg(self.next_goal)
             else:
                 self.position = old_position
@@ -566,7 +566,6 @@ if __name__ == '__main__':
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
     rospy.Subscriber(positions_topic, MergedData, Nav_node.position_callback)
 
-    rospy.loginfo("skvndncql")
 
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
