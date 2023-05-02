@@ -73,6 +73,8 @@ class NavNode():
 
         self.is_in_obstacle = False
 
+        rospy.loginfo("Nav node initialized")
+
     def find_middle_obstacles(self, path, path_portion : int):
         """
         Find the beginning and the end of the obstacle in the path portion
@@ -563,6 +565,8 @@ if __name__ == '__main__':
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
     rospy.Subscriber(positions_topic, MergedData, Nav_node.position_callback)
+
+    rospy.loginfo("skvndncql")
 
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
