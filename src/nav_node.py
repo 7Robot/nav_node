@@ -303,16 +303,13 @@ class NavNode():
         """
         Check if the obstacle list has changed and return a boolean
         """
-        if len(liste_obstacle) != len(self.obstacles):
-            return True
-        else:
-            for prev_obs in self.obstacles:
-                b=True
-                for obs in liste_obstacle:
-                    #Trigger distance = 0.03
-                    b = b and np.linalg.norm(np.array(obs) - np.array(prev_obs)) > 0.03
-                if b: # Aucun des nouveaux obstacles n'est proche de cet ancien
-                    return True
+        for prev_obs in self.obstacles:
+            b=False
+            for obs in liste_obstacle:
+                #Trigger distance = 0.03
+                b = b or np.linalg.norm(np.array(obs) - np.array(prev_obs)) < 5
+            if b==False: # Aucun des nouveaux obstacles n'est proche de cet ancien
+                return True
         return False
             
 
@@ -406,11 +403,12 @@ class NavNode():
             else :
                 rospy.logerr("Nom de robot non reconnu")
             
+
+            self.obstacles_processing(liste_obstacle)
+
             # Do not send another goal if the robot too close to the old position
             if np.linalg.norm(self.position - old_position) > self.distance_interpoint/2:
-                rospy.loginfo("Path : " + str(self.path))
-                
-                self.obstacles_processing(liste_obstacle)     
+                rospy.loginfo("Path : " + str(self.path))     
 
                 if self.path:
                     if type(self.next_goal) == type(None):
@@ -456,6 +454,7 @@ class NavNode():
         """
         
         # Emergency stop, le mettre à 0 désactive l'arret d'urgence
+        """
         if self.emergency_stop_distance > 0:
             for obstacle in liste_obstacle:
                 arr = self.chgt_base_plateau_to_robot(obstacle)
@@ -468,15 +467,18 @@ class NavNode():
                         if arr[0]<0:
                             self.emergency_stop()
                             rospy.logwarn("STOP")
-
+        """
+        
         # Convert to cm
         liste_obstacle = np.array([obstacle*100 for obstacle in liste_obstacle])
 
-        if self.obstacle_variation(np.reshape(liste_obstacle,(6))):
+        if self.obstacle_variation(liste_obstacle):
             
-            #rospy.loginfo("Obstacle variation")
+            rospack = rospkg.RosPack()
+            rospack.list()
+            np.save("{}/src/map/debug.npy".format(rospack.get_path('nav_node')), self.map_obstacles)
 
-            self.obstacles = np.reshape(liste_obstacle,(6))
+            self.obstacles = liste_obstacle
 
             ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
             Obstacles_coherents = []
