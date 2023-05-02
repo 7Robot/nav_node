@@ -1,7 +1,7 @@
 import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
-from cdf_msgs.msg import Pic_Action, MergedData, Trajectoire
+from cdf_msgs.msg import Pic_Action, MergedData, MergedDataBis, Trajectoire
 from std_msgs.msg import Bool
 from visualization_msgs.msg import MarkerArray, Marker
 from tool_lidar.objet import ChooseColor
@@ -32,6 +32,7 @@ class NavNode():
         self.max_iter = max_iter
         self.debug = debug
         self.activate = True
+        self.new_path = False
 
         if self.debug:
             self.react_pub = rospy.Publisher('/merged_datas', MergedData, queue_size=1)
@@ -265,6 +266,8 @@ class NavNode():
             pass
 
         self.path = path
+        rospy.loginfo("Found path : " + str(self.path))
+        self.new_path = True
 
     def correct_path(self):
         """
@@ -297,6 +300,7 @@ class NavNode():
         else:
             pass
             #rospy.logwarn("Pas de chemin")
+        self.next_goal = self.path[0]
         return self.next_goal
         
     def obstacle_variation(self, liste_obstacle):
@@ -320,10 +324,10 @@ class NavNode():
         """
         Callback pour récupérer la position cible
         """
-        rospy.loginfo("Position goal : " + str(msg))
         dist = np.sqrt((msg.x - self.position[0])**2 + (msg.y - self.position[1])**2)
         if dist > 0.01: # Si la position cible est trop loin
             self.position_goal = [msg.x, msg.y]
+            rospy.loginfo("Position goal : " + str(msg))
             # color = ChooseColor(0, 1, 0)
             # marker_array = MarkerArray()
             # marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15) 
@@ -357,9 +361,9 @@ class NavNode():
         self.action_orders_pub.publish(msg)
         marker_arr = MarkerArray()
         if self.name_robot == "Han7":
-            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/base")
+            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/fuzed")
         else:
-            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_2/base")
+            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_2/fuzed")
         marker_arr.markers.append(marker)
         pub_marker.publish(marker_arr)
         if self.debug:
@@ -387,27 +391,26 @@ class NavNode():
             old_position = self.position
 
             if self.name_robot == "Han7":
-                self.position = np.array([msg.robot_1.position.x, msg.robot_1.position.y])
-                liste_obstacle = [np.array([msg.robot_2.position.x, msg.robot_2.position.y]),
-                                    np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
-                                    np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
-                self.orientation = msg.robot_1.position.z
-                self.velocity = np.array([msg.robot_1.vitesse.x, msg.robot_1.vitesse.y, msg.robot_1.vitesse.z])
+                self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
+                liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y]),
+                                    np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y])]
+                self.orientation = msg.robot_1[-1].position.z
+                self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
             elif self.name_robot == "Gret7" :
-                self.position = np.array([msg.robot_2.position.x, msg.robot_2.position.y])
-                liste_obstacle = [np.array([msg.robot_1.position.x, msg.robot_2.position.y]),
-                                    np.array([msg.ennemi_1.position.x, msg.ennemi_1.position.y]),
-                                    np.array([msg.ennemi_2.position.x, msg.ennemi_2.position.y])]
-                self.orientation = msg.robot_2.position.z
-                self.velocity = np.array([msg.robot_2.vitesse.x, msg.robot_2.vitesse.y, msg.robot_2.vitesse.z])
+                self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
+                liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y]),
+                                    np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y])]
+                self.orientation = msg.robot_2[-1].position.z
+                self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
             else :
-                rospy.logerr("Nom de robot non reconnu")
-            
+                rospy.logerr("Nom de robot non reconnu")     
 
             self.obstacles_processing(liste_obstacle)
 
             # Do not send another goal if the robot too close to the old position
-            if np.linalg.norm(self.position - old_position) > self.distance_interpoint/2:
+            if np.linalg.norm(self.position - old_position) > self.distance_interpoint/2 or self.new_path:
+                self.new_path = False
+
                 rospy.loginfo("Path : " + str(self.path))     
 
                 if self.path:
@@ -566,7 +569,7 @@ if __name__ == '__main__':
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
-    rospy.Subscriber(positions_topic, MergedData, Nav_node.position_callback)
+    rospy.Subscriber(positions_topic, MergedDataBis, Nav_node.position_callback)
 
 
     # Vérification de la présence d'obstacle sur le chemin du robot
