@@ -358,6 +358,33 @@ class NavNode():
         ## On met à jour les informations sur le plateau
         self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
 
+    def assign_position(self, msg):
+        """
+        Récupération des positions des robots
+        """
+
+        if self.name_robot == "Han7":
+            self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
+            liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])]
+            if not(msg.ennemi_1[-1].position.x == 0 and msg.ennemi_1[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
+            if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
+            self.orientation = msg.robot_1[-1].position.z
+            self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
+        elif self.name_robot == "Gret7" :
+            self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
+            liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])]
+            if not(msg.ennemi_1[-1].position.x == 0 and msg.ennemi_1[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
+            if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
+            self.orientation = msg.robot_2[-1].position.z
+            self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
+        else :
+            rospy.logerr("Nom de robot non reconnu")    
+        return liste_obstacle
+
     # Callbacks
     # ---------------------------------------------------------------------------------------------
 
@@ -436,27 +463,8 @@ class NavNode():
             self.pub_marker.publish(marker_array)
         
         old_position = self.position
-
-        if self.name_robot == "Han7":
-            self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
-            liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])]
-            if not(msg.ennemi_1[-1].position.x == 0 and msg.ennemi_1[-1].position.y == 0):
-                liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
-            if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
-                liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
-            self.orientation = msg.robot_1[-1].position.z
-            self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
-        elif self.name_robot == "Gret7" :
-            self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
-            liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])]
-            if not(msg.ennemi_1[-1].position.x == 0 and msg.ennemi_1[-1].position.y == 0):
-                liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
-            if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
-                liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
-            self.orientation = msg.robot_2[-1].position.z
-            self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
-        else :
-            rospy.logerr("Nom de robot non reconnu")     
+ 
+        liste_obstacle = self.assign_position(msg)
 
         if not(self.is_in_obstacle):
             self.obstacles_processing(liste_obstacle)
@@ -550,7 +558,7 @@ class NavNode():
                     rospy.loginfo("Chemin obstrué")
                     # Si le chemin est obstrué on le recalcule
                     self.master_path(self.position, self.position_goal)
-                elif np.linalg.norm(self.position - self.position_goal) > self.distance_interpoint:
+                elif np.linalg.norm(self.position - self.position_goal) > self.distance_interpoint and len(self.path) > 0:
                     # Sinon si l'objectif n'est pas trop proche
                     # On mesure le potentiel nouveau chemin path et on le compare à l'ancien
                     #self.path
