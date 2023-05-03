@@ -212,6 +212,7 @@ class NavNode():
                 if not(self.is_obstacle(self.position[0] + x_conv, self.position[1] - y_conv)):
                     escape_point = np.array([self.position[0] + x_conv, self.position[1] - y_conv])
             r += 1
+        rospy.loginfo("Sortie d'obstacle trouvé en " + str(escape_point))
         self.path = [escape_point]
         self.next_goal = escape_point
         #rospy.loginfo("Point de sortie trouvé : " + str(escape_point))
@@ -231,7 +232,7 @@ class NavNode():
             else:
                 rospy.logwarn("Arrivée dans un obstacle ! Pas de chemin")
 
-        path = np.array([start, end])
+        path = [start, end]
         self.position_goal = end
 
         path_portion = 0
@@ -243,7 +244,7 @@ class NavNode():
             iter += 1
             middle = self.find_middle_obstacles(path, path_portion)
             if type(middle) == type(None):
-                self.path = np.array([self.position])
+                self.path = [np.array(self.position)]
                 self.new_path = True
                 rospy.logwarn("Pas de trajectoire")
                 return None
@@ -252,8 +253,9 @@ class NavNode():
                 rospy.loginfo("Detour trouvé : " + str(detour))
                 if type(detour) != type(None):
                     path.insert(path_portion+1, detour)
+                    rospy.loginfo("New Path : " + str(path))
                 else:
-                    self.path = np.array([self.position])
+                    self.path = [np.array(self.position)]
                     self.new_path = True
                     rospy.logwarn("Pas de trajectoire")
                     return None
@@ -284,7 +286,10 @@ class NavNode():
         """
         Get the next position to go and store it in self.next_goal
         """
-        self.next_goal = self.path[0]
+        if len(self.path)!=0:
+            self.next_goal = self.path[0]
+        else:
+            self.next_goal = self.position
         return self.next_goal
         
     def obstacle_variation(self, liste_obstacle):
@@ -306,10 +311,11 @@ class NavNode():
         """
         for i in range(len(self.path)-1):
             # Find each cm of the path
-            points = np.linspace(self.path[i], int(self.path[i+1], np.linalg.norm(np.array(self.path[i+1]) - np.array(self.path[i]))/0.01))
+            points = np.linspace(self.path[i], self.path[i+1], int(np.linalg.norm(np.array(self.path[i+1]) - np.array(self.path[i]))/0.01))
             for point in points:
                 if self.is_obstacle(point[0], point[1]):
                     return True
+        rospy.loginfo("No obstacle on the path")
         return False
     
     def add_obstacles(self, liste_obstacle):
@@ -363,16 +369,16 @@ class NavNode():
         if dist > 0.01: # Si la position cible est trop loin
             self.position_goal = [msg.x, msg.y]
             rospy.loginfo("Position goal : " + str(msg))
-            # color = ChooseColor(0, 1, 0)
-            # marker_array = MarkerArray()
-            # marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15) 
-            # marker_array.markers.append(marker_pos_other)
-            # self.pub_marker.publish(marker_array)
+            color = ChooseColor(1, 0, 0)
+            marker_array = MarkerArray()
+            marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15, frame_id="/robot_1/fuzed") 
+            marker_array.markers.append(marker_pos_other)
+            self.pub_marker.publish(marker_array)
             self.master_path(self.position, self.position_goal)
         else : # La cible est proche
             rospy.loginfo("Cible atteinte")
             self.position_goal = self.position
-            self.path = np.array([self.position])
+            self.path = [np.array(self.position)]
         
     def publish_pic_msg(self, next_goal):
         """
@@ -390,17 +396,17 @@ class NavNode():
 
         msg = Pic_Action()
         msg.action_destination = 'motor'
-        msg.action_msg = 'moveavant'
+        msg.action_msg = 'moveseg'
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
 
         self.action_orders_pub.publish(msg)
-        marker_arr = MarkerArray()
-        if self.name_robot == "Han7":
-            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/fuzed")
-        else:
-            marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_2/fuzed")
-        marker_arr.markers.append(marker)
-        pub_marker.publish(marker_arr)
+        # marker_arr = MarkerArray()
+        # if self.name_robot == "Han7":
+        #     marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/fuzed")
+        # else:
+        #     marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_2/fuzed")
+        # marker_arr.markers.append(marker)
+        # pub_marker.publish(marker_arr)
         if self.debug:
             time.sleep(0.01)
             msg = MergedData()
@@ -422,33 +428,43 @@ class NavNode():
         """
         Callback pour récupérer la position des robots
         """
-        if type(self.position_goal) != type(None):
-            old_position = self.position
+        for i, elem in enumerate(self.path):
+            color = ChooseColor(0, 1, 0)
+            marker_array = MarkerArray()
+            marker_pos_other = tool_pub.create_marker(2000 + i, 3, 0, 0.1, 0.1, elem[0], elem[1], color, scale_z=0.15, frame_id="/robot_1/base") 
+            marker_array.markers.append(marker_pos_other)
+            self.pub_marker.publish(marker_array)
+        
+        old_position = self.position
 
-            if self.name_robot == "Han7":
-                self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
-                liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y]),
-                                    np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y])]
-                self.orientation = msg.robot_1[-1].position.z
-                self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
-            elif self.name_robot == "Gret7" :
-                self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
-                liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y]),
-                                    np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y])]
-                self.orientation = msg.robot_2[-1].position.z
-                self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
-            else :
-                rospy.logerr("Nom de robot non reconnu")     
+        if self.name_robot == "Han7":
+            self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
+            liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y]),
+                                np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]),
+                                np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y])]
+            self.orientation = msg.robot_1[-1].position.z
+            self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
+        elif self.name_robot == "Gret7" :
+            self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
+            liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y]),
+                                np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]),
+                                np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y])]
+            self.orientation = msg.robot_2[-1].position.z
+            self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
+        else :
+            rospy.logerr("Nom de robot non reconnu")     
 
+        if not(self.is_in_obstacle):
             self.obstacles_processing(liste_obstacle)
 
+        if type(self.position_goal) != type(None):
             # Do not send another goal if the robot too close to the old position
             if np.linalg.norm(self.position - old_position) > self.distance_interpoint/2 or self.new_path:
                 self.new_path = False
 
                 rospy.loginfo("Path : " + str(self.path))     
 
-                if self.path:
+                if len(self.path)!=0:
                     # Si il n'y a pas encore de position suivante on la récupère
                     if type(self.next_goal) == type(None):
                         self.get_next_pos()
@@ -515,7 +531,7 @@ class NavNode():
         liste_obstacle = np.array([obstacle*100 for obstacle in liste_obstacle])
 
         if self.obstacle_variation(liste_obstacle):
-            
+
             # Save the map for debug
             rospack = rospkg.RosPack()
             rospack.list()
@@ -527,10 +543,11 @@ class NavNode():
             # On met à jour le chemin si un obstacle se trouve dessus
             if self.position_goal is not None:
                 if self.verify_path():
+                    rospy.loginfo("Chemin obstrué")
                     # Si le chemin est obstrué on le recalcule
                     self.master_path(self.position, self.position_goal)
-                else:
-                    # Sinon
+                elif np.linalg.norm(self.position - self.position_goal) > self.distance_interpoint:
+                    # Sinon si l'objectif n'est pas trop proche
                     # On mesure le potentiel nouveau chemin path et on le compare à l'ancien
                     #self.path
 
@@ -546,6 +563,8 @@ class NavNode():
                     if length_of_path < length_of_old_path:
                         self.path = path
                         rospy.loginfo("Found path : " + str(self.path))
+                else:
+                    rospy.loginfo("Chemin non obstrué")
 
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
