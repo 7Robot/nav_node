@@ -93,7 +93,7 @@ class NavNode():
         start = np.array(path[path_portion])
         end = np.array(path[path_portion + 1])
 
-        discretisation = np.linspace(start, end, int(np.linalg.norm(end-start)/(np.linalg.norm(start - end)*0.01)))
+        discretisation = np.linspace(start, end, int(np.linalg.norm(end-start)/0.01))
 
         index_in_disc = 0
         (x, y) = (discretisation[index_in_disc, 0], discretisation[index_in_disc, 1])
