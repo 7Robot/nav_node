@@ -217,7 +217,7 @@ class NavNode():
         #rospy.loginfo("Point de sortie trouvé : " + str(escape_point))
         self.publish_pic_msg(escape_point)
 
-    def master_path(self, start, end):
+    def master_path(self, start, end, apply = True):
         """
         Calculate the path to go from start to end
         """
@@ -228,8 +228,10 @@ class NavNode():
                 # rospy.logwarn("Départ dans un obstacle, on le quitte")
                 self.get_out_of_obstacle()
                 return None
+            else:
+                rospy.logwarn("Arrivée dans un obstacle ! Pas de chemin")
 
-        path = [start, end]
+        path = np.array([start, end])
         self.position_goal = end
 
         path_portion = 0
@@ -241,7 +243,8 @@ class NavNode():
             iter += 1
             middle = self.find_middle_obstacles(path, path_portion)
             if type(middle) == type(None):
-                self.path = [self.position]
+                self.path = np.array([self.position])
+                self.new_path = True
                 rospy.logwarn("Pas de trajectoire")
                 return None
             elif middle:
@@ -250,6 +253,8 @@ class NavNode():
                 if type(detour) != type(None):
                     path.insert(path_portion+1, detour)
                 else:
+                    self.path = np.array([self.position])
+                    self.new_path = True
                     rospy.logwarn("Pas de trajectoire")
                     return None
             else:
@@ -264,42 +269,21 @@ class NavNode():
             #
             #rospy.loginfo("Found path" + str(path))
             pass
-
-        self.path = path
-        rospy.loginfo("Found path : " + str(self.path))
-        self.new_path = True
-
-    def correct_path(self):
-        """
-        Correct the path if an obstacle is on it
-        """
-
-        # Vérifie si un obstacle est sur le chemin
-        pos = self.position
-        for i in range(len(self.path)-1):
-            vect = np.array(self.path[i+1]) - np.array(self.path[i])/np.linalg.norm(np.array(self.path[i+1]) - np.array(self.path[i]))
-            if np.linalg.norm(np.array(pos) - np.array(self.path[i])) < 0.1:
-                continue
-            else:
-                pos += vect * 0.01
-
-            if self.is_obstacle(pos[0], pos[1]):
-                rospy.logwarn("Obstacle sur le chemin")
-                self.master_path(self.position, self.position_goal)
-                return None
+        
+        if apply:
+            self.path = path
+            rospy.loginfo("Found path : " + str(self.path))
+            self.new_path = True
+        else:
+            return path
+        
+        if self.verify_path():
+            rospy.logerr("OBSTACLE SUR LE CHEMIN")
 
     def get_next_pos(self):
         """
         Get the next position to go and store it in self.next_goal
         """
-        if len(self.path) >= 1:
-            v1 = np.array(self.path[0]) - np.array(self.position)
-            vect = v1/np.linalg.norm(v1)
-            self.next_goal = np.array(self.position) + vect * self.distance_interpoint
-            #rospy.loginfo("Next goal set to : " + str(self.next_goal))
-        else:
-            pass
-            #rospy.logwarn("Pas de chemin")
         self.next_goal = self.path[0]
         return self.next_goal
         
@@ -316,6 +300,57 @@ class NavNode():
                 return True
         return False
             
+    def verify_path(self):
+        """
+        Verify if there is an obstacle on the path
+        """
+        for i in range(len(self.path)-1):
+            # Find each cm of the path
+            points = np.linspace(self.path[i], int(self.path[i+1], np.linalg.norm(np.array(self.path[i+1]) - np.array(self.path[i]))/0.01))
+            for point in points:
+                if self.is_obstacle(point[0], point[1]):
+                    return True
+        return False
+    
+    def add_obstacles(self, liste_obstacle):
+        self.obstacles = liste_obstacle
+
+        ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
+        Obstacles_coherents = []
+
+        x_plateau = self.shape_board[0]
+        y_plateau = self.shape_board[1]
+
+        for obstacle in liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
+            if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50):
+                Obstacles_coherents.append(obstacle)
+
+        ## On crée une aire de jeu plus grande que le plateau pour traiter les obstacles hors du plateau
+
+        x_plateau_max = x_plateau + 200                    # On rajoute 100cm de marge sur chaque côté
+        y_plateau_max = y_plateau + 200
+
+        Cadrillage_max = np.zeros((x_plateau_max, y_plateau_max))
+
+        ## On crée une matrice associée à chaque obstacle
+
+        for obstacle in Obstacles_coherents: 
+            x_obstacle = int(obstacle[0])+100
+            y_obstacle = int(obstacle[1])+100
+            rayon_obstacle = int(100*self.max_radius)
+
+            # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
+            carre_rayon = rayon_obstacle**2
+            M_obstacle = ((np.arange(2*rayon_obstacle)-rayon_obstacle)**2+((np.arange(2*rayon_obstacle)-rayon_obstacle)**2).reshape(2*rayon_obstacle,1)<=carre_rayon).astype(int)
+
+            # On place la matrice dans la matrice Cadrillage_max aux bonnes coordonnées
+            Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle]= np.logical_or(Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle],M_obstacle)
+
+        ## On crée une matrice associée au plateau
+        Cadrillage_rempli = Cadrillage_max[100:x_plateau_max-100,100:y_plateau+100]
+
+        ## On met à jour les informations sur le plateau
+        self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
 
     # Callbacks
     # ---------------------------------------------------------------------------------------------
@@ -337,7 +372,7 @@ class NavNode():
         else : # La cible est proche
             rospy.loginfo("Cible atteinte")
             self.position_goal = self.position
-            self.path = [self.position]
+            self.path = np.array([self.position])
         
     def publish_pic_msg(self, next_goal):
         """
@@ -414,8 +449,8 @@ class NavNode():
                 rospy.loginfo("Path : " + str(self.path))     
 
                 if self.path:
+                    # Si il n'y a pas encore de position suivante on la récupère
                     if type(self.next_goal) == type(None):
-
                         self.get_next_pos()
                     else:
                         if np.linalg.norm(np.array(self.position) - np.array(self.next_goal)) < self.distance_interpoint:
@@ -423,27 +458,31 @@ class NavNode():
                             if len(self.path) == 0: # On a atteint la cible
                                 rospy.loginfo("Cible atteinte")
                                 self.action_done_pub.publish(True)
+                                # Si l'on était dans un obstacle alors nous en sommes sorti
                                 if self.is_in_obstacle:
                                     self.is_in_obstacle = False
                                     if self.is_obstacle(self.position[0], self.position[1]):
+                                        # Si on est toujours dans un obstacle, on continue d'en sortir
                                         self.get_out_of_obstacle()
-                                        rospy.loginfo("Sortie de l'obstacle")
+                                        rospy.loginfo("De nouveau dans un obstacle, sortie de l'obstacle")
                                     else:
+                                        # Si on est sorti de l'obstacle, on peut continuer vers l'objectif
                                         rospy.loginfo("Recherche du chemin vers "+str(self.position_goal))
                                         self.master_path(self.position, self.position_goal)
                                 else:
+                                    # Si on n'était pas dans un obstacle, alors on est arrivé à l'objectif
                                     self.position_goal = None
                                     rospy.loginfo("Fin du chemin")
                                     return None
-                            elif np.linalg.norm(np.array(self.position) - np.array(self.path[0])) < self.distance_interpoint:
-                                # Si on est assez proche du point de chemin suivant
-                                rospy.loginfo("Advancing in path" + str(self.path))
-                                self.next_goal = self.path.pop(0)
                             else:
+                                rospy.loginfo("Advancing in path" + str(self.path))
+                                self.path.pop(0)
                                 self.get_next_pos()
                         else:
+                            # Sinon on récupère la position suivante
                             self.get_next_pos()
-                    if len(self.path) != 0:       
+                    if len(self.path) != 0:
+                        # Dans tous les cas si l'on est pas arrivé, on publie la position suivante     
                         self.publish_pic_msg(self.next_goal)
             else:
                 self.position = old_position
@@ -477,52 +516,36 @@ class NavNode():
 
         if self.obstacle_variation(liste_obstacle):
             
+            # Save the map for debug
             rospack = rospkg.RosPack()
             rospack.list()
             np.save("{}/src/map/debug.npy".format(rospack.get_path('nav_node')), self.map_obstacles)
 
-            self.obstacles = liste_obstacle
+            #On ajoute les obstacles à la carte
+            self.add_obstacles(liste_obstacle)
 
-            ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
-            Obstacles_coherents = []
-
-            x_plateau = self.shape_board[0]
-            y_plateau = self.shape_board[1]
-
-            for obstacle in liste_obstacle:                            # Tout objet à plus de 50 cm du plateau est ignoré
-                if (-50<obstacle[0] and obstacle[0]<x_plateau+50) and (-50<obstacle[1] and obstacle[1]<y_plateau+50):
-                    Obstacles_coherents.append(obstacle)
-
-            ## On crée une aire de jeu plus grande que le plateau pour traiter les obstacles hors du plateau
-
-            x_plateau_max = x_plateau + 200                    # On rajoute 100cm de marge sur chaque côté
-            y_plateau_max = y_plateau + 200
-
-            Cadrillage_max = np.zeros((x_plateau_max, y_plateau_max))
-
-            ## On crée une matrice associée à chaque obstacle
-            
-            for obstacle in Obstacles_coherents: 
-                x_obstacle = int(obstacle[0])+100
-                y_obstacle = int(obstacle[1])+100
-                rayon_obstacle = int(100*self.max_radius)
-
-                # Placer des 1 dans le cercle de rayon rayon_obstacle autour de coordonnees_obstacle
-                carre_rayon = rayon_obstacle**2
-                M_obstacle = ((np.arange(2*rayon_obstacle)-rayon_obstacle)**2+((np.arange(2*rayon_obstacle)-rayon_obstacle)**2).reshape(2*rayon_obstacle,1)<=carre_rayon).astype(int)
-
-                # On place la matrice dans la matrice Cadrillage_max aux bonnes coordonnées
-                Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle]= np.logical_or(Cadrillage_max[x_obstacle-rayon_obstacle:x_obstacle+rayon_obstacle,y_obstacle-rayon_obstacle:y_obstacle+rayon_obstacle],M_obstacle)
-
-            ## On crée une matrice associée au plateau
-            Cadrillage_rempli = Cadrillage_max[100:x_plateau_max-100,100:y_plateau+100]
-
-            ## On met à jour les informations sur le plateau
-            self.map_obstacles = np.logical_or(self.static_obstacles, Cadrillage_rempli)
-            
-            # On met à jour le chemin
+            # On met à jour le chemin si un obstacle se trouve dessus
             if self.position_goal is not None:
-                self.master_path(self.position, self.position_goal)
+                if self.verify_path():
+                    # Si le chemin est obstrué on le recalcule
+                    self.master_path(self.position, self.position_goal)
+                else:
+                    # Sinon
+                    # On mesure le potentiel nouveau chemin path et on le compare à l'ancien
+                    #self.path
+
+                    path = self.master_path(self.position, self.position_goal, False)
+                    length_of_path = np.linalg.norm(self.position - path[0])
+                    for i in range(len(path)-1):
+                        length_of_path += np.linalg.norm(np.array(path[i]) - np.array(path[i+1]))
+                    length_of_old_path = np.linalg.norm(self.position - self.path[0])
+                    for i in range(len(self.path)-1):
+                        length_of_old_path += np.linalg.norm(np.array(self.path[i]) - np.array(self.path[i+1]))
+                    
+                    # Si le chemin est plus court on l'applique
+                    if length_of_path < length_of_old_path:
+                        self.path = path
+                        rospy.loginfo("Found path : " + str(self.path))
 
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
