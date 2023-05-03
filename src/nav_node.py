@@ -371,7 +371,7 @@ class NavNode():
             rospy.loginfo("Position goal : " + str(msg))
             color = ChooseColor(1, 0, 0)
             marker_array = MarkerArray()
-            marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15, frame_id="/robot_1/fuzed") 
+            marker_pos_other = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, msg.x, msg.y, color, scale_z=0.15, frame_id="fuzed") 
             marker_array.markers.append(marker_pos_other)
             self.pub_marker.publish(marker_array)
             self.master_path(self.position, self.position_goal)
@@ -439,16 +439,20 @@ class NavNode():
 
         if self.name_robot == "Han7":
             self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
-            liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y]),
-                                np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]),
-                                np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y])]
+            liste_obstacle = [np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])]
+            if not(msg.ennemi_1[-1].position.x == 0 and msg.ennemi_1[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
+            if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
             self.orientation = msg.robot_1[-1].position.z
             self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
         elif self.name_robot == "Gret7" :
             self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
-            liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y]),
-                                np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]),
-                                np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y])]
+            liste_obstacle = [np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])]
+            if not(msg.ennemi_1[-1].position.x == 0 and msg.ennemi_1[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
+            if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
             self.orientation = msg.robot_2[-1].position.z
             self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
         else :
