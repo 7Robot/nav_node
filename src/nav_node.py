@@ -316,6 +316,7 @@ class NavNode():
                 if self.is_obstacle(point[0], point[1]):
                     return True
         rospy.loginfo("No obstacle on the path")
+        rospy.loginfo("Obstacles :" + str(self.obstacles))
         return False
     
     def add_obstacles(self, liste_obstacle):
