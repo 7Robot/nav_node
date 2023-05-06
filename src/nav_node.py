@@ -17,7 +17,7 @@ class NavNode():
                  action_done_pub, 
                  action_orders_pub, margin=0.03, 
                  pos = np.array([0,0]), 
-                 max_radius = 0.35, 
+                 max_radius = 0.2, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
                  emergency_stop_distance = 0,
@@ -70,8 +70,7 @@ class NavNode():
         self.activation_sub = rospy.Subscriber(activation_topic, Bool, self.activation_callback)
 
         # Contain the list of the obstacles (valeurs initiales aberrantes)
-        self.obstacles = np.array([-255 for _ in range(6)])
-
+        self.obstacles = [np.array([1000,1000]) for _ in range(3)]
         self.is_in_obstacle = False
 
         rospy.loginfo("Nav node initialized")
@@ -231,7 +230,8 @@ class NavNode():
                 self.get_out_of_obstacle()
                 return None
             else:
-                rospy.logwarn("Arrivée dans un obstacle ! Pas de chemin")
+                rospy.logwarn("Arrivée dans un obstacle ! Pas de chemin : " + str(end))
+                rospy.logwarn("Obstacles : "+str(self.obstacles))
 
         path = [start, end]
         self.position_goal = end
@@ -478,9 +478,10 @@ class NavNode():
  
         liste_obstacle = self.assign_position(msg)
 
+        self.obstacles_processing(liste_obstacle)
+
         """
         if not(self.is_in_obstacle):
-            self.obstacles_processing(liste_obstacle)
         elif not(self.is_obstacle(self.position[0], self.position[1])):
             self.is_in_obstacle = False
             res = self.master_path(self.position, self.position_goal)
@@ -488,7 +489,7 @@ class NavNode():
                 self.publish_pic_msg(self.position)
         """
         
-        if type(self.next_goal) == type(None):
+        if type(self.next_goal) != type(None):
             if np.linalg.norm(self.position - self.next_goal) < self.distance_interpoint:
                 if len(self.path) > 1:
                     self.path.pop(0)
@@ -527,8 +528,10 @@ class NavNode():
         liste_obstacle = np.array([obstacle*100 for obstacle in liste_obstacle])
 
         if self.obstacle_variation(liste_obstacle):
-
+            
             rospy.loginfo("New_obstacles : " + str(liste_obstacle))
+
+            self.obstacles = liste_obstacle
 
             # Save the map for debug
             rospack = rospkg.RosPack()
