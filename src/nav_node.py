@@ -414,7 +414,7 @@ class NavNode():
         """
         Get position from odometry
         """
-        self.position = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y])
+        self.position = np.array([msg.position.x, msg.position.y])
         self.orientation = msg.pose.pose.orientation.z
 
     def position_goal_callback(self, msg):
