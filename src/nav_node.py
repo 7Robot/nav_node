@@ -1,7 +1,7 @@
 import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
-from cdf_msgs.msg import Pic_Action, MergedData, MergedDataBis, Trajectoire
+from cdf_msgs.msg import Pic_Action, RobotData, MergedDataBis, Trajectoire
 from std_msgs.msg import Bool
 from visualization_msgs.msg import MarkerArray, Marker
 from tool_lidar.objet import ChooseColor
@@ -19,7 +19,7 @@ class NavNode():
                  action_result_pub,
                  margin=0.03, 
                  pos = np.array([0.5,1]), 
-                 max_radius = 0.2, 
+                 max_radius = 0.45, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
                  emergency_stop_distance = 0,
@@ -47,10 +47,14 @@ class NavNode():
         elif color == "Debug":
             self.static_obstacles = np.load("{}/src/map/debug_map.npy".format(rospack.get_path('nav_node')))
             rospy.loginfo("Debug map loaded")
+        elif color == "Debug border":
+            self.static_obstacles = np.load("{}/src/map/debug_border.npy".format(rospack.get_path('nav_node')))
+            rospy.loginfo("Debug map with border loaded")
         else:
             rospy.logerr("Color not recognized")
             exit()
         self.map_obstacles = self.static_obstacles.copy()
+
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
         
@@ -67,7 +71,6 @@ class NavNode():
         self.action_result_pub = action_result_pub
 
         self.name_robot = name_robot
-        self.activation_sub = rospy.Subscriber(activation_topic, Bool, self.activation_callback)
 
         # Contain the list of the obstacles (valeurs initiales aberrantes)
         self.obstacles = [np.array([1000,1000]) for _ in range(3)]
@@ -234,7 +237,7 @@ class NavNode():
             if self.is_obstacle(start[0], start[1]):
                 # rospy.logwarn("Départ dans un obstacle, on le quitte")
                 #TODO : Fiabiliser la sortie d'obstacle
-                #self.get_out_of_obstacle()
+                self.get_out_of_obstacle()
                 return None
             else:
                 rospy.logwarn("Arrivée dans un obstacle ! Pas de chemin : " + str(end))
@@ -313,7 +316,7 @@ class NavNode():
             b=False
             for obs in liste_obstacle:
                 #Trigger distance = 0.03
-                b = b or np.linalg.norm(np.array(obs) - np.array(prev_obs)) < 5
+                b = b or np.linalg.norm(np.array(obs) - np.array(prev_obs)) < 10
             if b==False: # Aucun des nouveaux obstacles n'est proche de cet ancien
                 return True
         return False
@@ -334,8 +337,8 @@ class NavNode():
             for point in points:
                 if self.is_obstacle(point[0], point[1]):
                     return True
-        rospy.loginfo("No obstacle on the path")
-        rospy.loginfo("Obstacles :" + str(self.obstacles))
+        #rospy.loginfo("No obstacle on the path")
+        #rospy.loginfo("Obstacles :" + str(self.obstacles))
         return False
     
     def add_obstacles(self, liste_obstacle):
@@ -384,7 +387,6 @@ class NavNode():
         """
 
         if self.name_robot == "Han7":
-            self.position = np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y])
             liste_obstacle = []
             if not(msg.robot_2[-1].position.x == 0 and msg.robot_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y]))
@@ -392,10 +394,8 @@ class NavNode():
                 liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
             if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
-            self.orientation = msg.robot_1[-1].position.z
             self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
         elif self.name_robot == "Gret7" :
-            self.position = np.array([msg.robot_2[-1].position.x, msg.robot_2[-1].position.y])
             liste_obstacle = []
             if not(msg.robot_1[-1].position.x == 0 and msg.robot_1[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.robot_1[-1].position.x, msg.robot_1[-1].position.y]))
@@ -403,7 +403,6 @@ class NavNode():
                 liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
             if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
-            self.orientation = msg.robot_2[-1].position.z
             self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
         else :
             rospy.logerr("Nom de robot non reconnu")    
@@ -411,6 +410,12 @@ class NavNode():
 
     # Callbacks
     # ---------------------------------------------------------------------------------------------
+    def odometry_callback(self,msg):
+        """
+        Get position from odometry
+        """
+        self.position = np.array([msg.position.x, msg.position.y])
+        self.orientation = msg.position.z
 
     def position_goal_callback(self, msg):
         """
@@ -430,6 +435,15 @@ class NavNode():
                 self.publish_pic_msg(self.position)
                 self.action_result_pub.publish(False)
             else:
+                # On réduit le rayon de courbure pour tourner sur soi-même
+                msg_rayoncourbure = Pic_Action()
+
+                msg_rayoncourbure.action_destination = 'motor'
+                msg_rayoncourbure.action_msg = 'setrayoncourbure'
+                msg_rayoncourbure.action_msg += ' ' + str(0.001)
+
+                self.action_orders_pub.publish(msg_rayoncourbure)
+
                 self.get_next_pos()
                 self.publish_pic_msg(self.next_goal)
         else : # La cible est proche
@@ -453,7 +467,7 @@ class NavNode():
 
         msg = Pic_Action()
         msg.action_destination = 'motor'
-        msg.action_msg = 'moveseg'
+        msg.action_msg = 'moveavant'
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1]) + ' ' + str(more_param)
 
         self.action_orders_pub.publish(msg)
@@ -489,25 +503,21 @@ class NavNode():
 
         self.obstacles_processing(liste_obstacle)
 
-        """
-        if not(self.is_in_obstacle):
-        elif not(self.is_obstacle(self.position[0], self.position[1])):
-            self.is_in_obstacle = False
-            res = self.master_path(self.position, self.position_goal)
-            if res == None:
-                self.publish_pic_msg(self.position)
-        """
         if self.is_in_obstacle:
             if not(self.is_obstacle(self.position[0], self.position[1])):
                 self.is_in_obstacle = False
                 res = self.master_path(self.position, self.position_goal)
                 if res == None:
                     self.publish_pic_msg(self.position)
+                else:
+                    self.get_next_pos()
+                    self.publish_pic_msg(self.next_goal)
+
                     self.action_result_pub.publish(False)
             else:
                 return None
         
-        if type(self.next_goal) != type(None):
+        if type(self.next_goal) != type(None) and not(self.is_in_obstacle):
             if np.linalg.norm(self.position - self.next_goal) < self.distance_interpoint:
                 if len(self.path) > 2:
                     self.path.pop(0)
@@ -556,14 +566,9 @@ class NavNode():
 
         if self.obstacle_variation(liste_obstacle):
             
-            rospy.loginfo("New_obstacles : " + str(liste_obstacle))
+            #rospy.loginfo("New_obstacles : " + str(liste_obstacle))
 
             self.obstacles = liste_obstacle
-
-            # Save the map for debug
-            rospack = rospkg.RosPack()
-            rospack.list()
-            np.save("{}/src/map/debug.npy".format(rospack.get_path('nav_node')), self.map_obstacles)
 
             #On ajoute les obstacles à la carte
             self.add_obstacles(liste_obstacle)
@@ -572,11 +577,12 @@ class NavNode():
             if self.position_goal is not None:
                 if self.verify_path():
                     rospy.loginfo("Chemin obstrué")
+                    rospy.loginfo("Obstacles : "+str(self.obstacles))
                     # Si le chemin est obstrué on le recalcule
                     res = self.master_path(self.position, self.position_goal)
                     if res == None:
+                        # Le chemin est obstrué et il n'y a pas de chemin alternatif
                         self.publish_pic_msg(self.position)
-                        self.action_result_pub.publish(False)
                 elif np.linalg.norm(self.position - self.position_goal) > self.distance_interpoint and len(self.path) > 0:
                     # Sinon si l'objectif n'est pas trop proche
                     # On mesure le potentiel nouveau chemin path et on le compare à l'ancien
@@ -601,7 +607,8 @@ class NavNode():
                         self.action_result_pub.publish(False)
 
                 else:
-                    rospy.loginfo("Chemin non obstrué")
+                    #rospy.loginfo("Chemin non obstrué")
+                    pass
 
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
@@ -612,6 +619,8 @@ class NavNode():
         return point_transforme_to_robot
 
     def activation_callback(self, msg):
+        self.position_callback = None
+        self.next_goal = None
         self.activation = msg.data
 
     def debug_callback(self, data):
@@ -658,6 +667,7 @@ if __name__ == '__main__':
     debug_mode = rospy.get_param('~debug_mode', False)
     name_robot = rospy.get_param('~name_robot', 'Han7')
     activate_topic = rospy.get_param('~activate_topic', '/robot_1/activation_nav_node')
+    odometry_topic = rospy.get_param('~odometry_topic', '/robot_1/Odom')
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
@@ -666,6 +676,7 @@ if __name__ == '__main__':
 
     # Création de la classe NavigationNode
     Nav_node = NavNode(action_orders_pub=action_orders_pub, 
+                       action_result_pub=result_pub,
                        distance_interpoint=distance_interpoint, 
                        margin=margin, 
                        max_iter=max_iter,
@@ -678,6 +689,8 @@ if __name__ == '__main__':
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
     rospy.Subscriber(positions_topic, MergedDataBis, Nav_node.position_callback)
+    rospy.Subscriber(activate_topic, Bool, Nav_node.activation_callback)
+    rospy.Subscriber(odometry_topic, RobotData, Nav_node.odometry_callback)
 
 
     # Vérification de la présence d'obstacle sur le chemin du robot
