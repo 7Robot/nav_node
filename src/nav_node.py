@@ -437,7 +437,7 @@ class NavNode():
             self.position_goal = self.position
             self.path = [np.array(self.position)]
         
-    def publish_pic_msg(self, next_goal):
+    def publish_pic_msg(self, next_goal, more_param = 0):
         """
         Publie un message ordonnant au robot de suivre le chemin "path"
 
@@ -454,7 +454,7 @@ class NavNode():
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'moveseg'
-        msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
+        msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1]) + ' ' + str(more_param)
 
         self.action_orders_pub.publish(msg)
         # marker_arr = MarkerArray()
@@ -509,11 +509,13 @@ class NavNode():
         
         if type(self.next_goal) != type(None):
             if np.linalg.norm(self.position - self.next_goal) < self.distance_interpoint:
-                if len(self.path) > 1:
+                if len(self.path) > 2:
                     self.path.pop(0)
                     self.next_goal = self.get_next_pos()
-                    self.publish_pic_msg(self.next_goal)
-
+                    if len(self.path) == 2:
+                        self.publish_pic_msg(self.next_goal, 1)
+                    else:
+                        self.publish_pic_msg(self.next_goal)
                 elif len(self.path) == 1:
                     self.path = []
                     self.next_goal = None
