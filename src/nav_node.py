@@ -17,7 +17,7 @@ class NavNode():
                  action_done_pub, 
                  action_orders_pub, margin=0.03, 
                  pos = np.array([0.5,1]), 
-                 max_radius = 0.4, 
+                 max_radius = 0.6, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
                  emergency_stop_distance = 0,
@@ -49,6 +49,7 @@ class NavNode():
             rospy.logerr("Color not recognized")
             exit()
         self.map_obstacles = self.static_obstacles.copy()
+
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
         
@@ -309,7 +310,7 @@ class NavNode():
             b=False
             for obs in liste_obstacle:
                 #Trigger distance = 0.03
-                b = b or np.linalg.norm(np.array(obs) - np.array(prev_obs)) < 5
+                b = b or np.linalg.norm(np.array(obs) - np.array(prev_obs)) < 10
             if b==False: # Aucun des nouveaux obstacles n'est proche de cet ancien
                 return True
         return False
@@ -484,14 +485,6 @@ class NavNode():
 
         self.obstacles_processing(liste_obstacle)
 
-        """
-        if not(self.is_in_obstacle):
-        elif not(self.is_obstacle(self.position[0], self.position[1])):
-            self.is_in_obstacle = False
-            res = self.master_path(self.position, self.position_goal)
-            if res == None:
-                self.publish_pic_msg(self.position)
-        """
         if self.is_in_obstacle:
             if not(self.is_obstacle(self.position[0], self.position[1])):
                 self.is_in_obstacle = False
