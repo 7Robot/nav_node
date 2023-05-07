@@ -429,6 +429,15 @@ class NavNode():
             if res == None:
                 self.publish_pic_msg(self.position)
             else:
+                # On réduit le rayon de courbure pour tourner sur soi-même
+                msg_rayoncourbure = Pic_Action()
+
+                msg_rayoncourbure.action_destination = 'motor'
+                msg_rayoncourbure.action_msg = 'setrayoncourbure'
+                msg_rayoncourbure.action_msg += ' ' + str(0.001)
+
+                self.action_orders_pub.publish(msg_rayoncourbure)
+
                 self.get_next_pos()
                 self.publish_pic_msg(self.next_goal)
         else : # La cible est proche
@@ -550,11 +559,6 @@ class NavNode():
             #rospy.loginfo("New_obstacles : " + str(liste_obstacle))
 
             self.obstacles = liste_obstacle
-
-            # Save the map for debug
-            rospack = rospkg.RosPack()
-            rospack.list()
-            np.save("{}/src/map/debug.npy".format(rospack.get_path('nav_node')), self.map_obstacles)
 
             #On ajoute les obstacles à la carte
             self.add_obstacles(liste_obstacle)
