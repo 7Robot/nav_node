@@ -17,7 +17,7 @@ class NavNode():
                  action_done_pub, 
                  action_orders_pub, margin=0.03, 
                  pos = np.array([0.5,1]), 
-                 max_radius = 0.6, 
+                 max_radius = 0.45, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
                  emergency_stop_distance = 0,
@@ -45,6 +45,9 @@ class NavNode():
         elif color == "Debug":
             self.static_obstacles = np.load("{}/src/map/debug_map.npy".format(rospack.get_path('nav_node')))
             rospy.loginfo("Debug map loaded")
+        elif color == "Debug border":
+            self.static_obstacles = np.load("{}/src/map/debug_border.npy".format(rospack.get_path('nav_node')))
+            rospy.loginfo("Debug map with border loaded")
         else:
             rospy.logerr("Color not recognized")
             exit()
@@ -449,7 +452,7 @@ class NavNode():
 
         msg = Pic_Action()
         msg.action_destination = 'motor'
-        msg.action_msg = 'moveseg'
+        msg.action_msg = 'moveavant'
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1])
 
         self.action_orders_pub.publish(msg)
