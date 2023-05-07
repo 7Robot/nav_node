@@ -15,7 +15,9 @@ import time
 class NavNode():
     def __init__(self,
                  action_done_pub, 
-                 action_orders_pub, margin=0.03, 
+                 action_orders_pub,
+                 action_result_pub,
+                 margin=0.03, 
                  pos = np.array([0.5,1]), 
                  max_radius = 0.45, 
                  max_iter = 15, 
@@ -66,6 +68,8 @@ class NavNode():
 
         self.action_orders_pub = action_orders_pub
         self.action_done_pub = action_done_pub
+        self.action_result_pub = action_result_pub
+
         self.name_robot = name_robot
         self.activation_sub = rospy.Subscriber(activation_topic, Bool, self.activation_callback)
 
@@ -428,6 +432,7 @@ class NavNode():
             res = self.master_path(self.position, self.position_goal)
             if res == None:
                 self.publish_pic_msg(self.position)
+                self.action_result_pub.publish(False)
             else:
                 # On réduit le rayon de courbure pour tourner sur soi-même
                 msg_rayoncourbure = Pic_Action()
@@ -507,6 +512,7 @@ class NavNode():
                     self.get_next_pos()
                     self.publish_pic_msg(self.next_goal)
 
+                    self.action_result_pub.publish(False)
             else:
                 return None
         
@@ -521,6 +527,7 @@ class NavNode():
                     self.path = []
                     self.next_goal = None
                     rospy.loginfo("Arrivé à destination : " + str(self.position))
+                    self.action_result_pub.publish(True)
                 else:
                     rospy.logwarn("Unexpected Warning")
             else:
@@ -573,10 +580,6 @@ class NavNode():
                     if res == None:
                         # Le chemin est obstrué et il n'y a pas de chemin alternatif
                         self.publish_pic_msg(self.position)
-                        self.next_goal = None
-                    else:
-                        self.get_next_pos()
-                        self.publish_pic_msg(self.next_goal)
                 elif np.linalg.norm(self.position - self.position_goal) > self.distance_interpoint and len(self.path) > 0:
                     # Sinon si l'objectif n'est pas trop proche
                     # On mesure le potentiel nouveau chemin path et on le compare à l'ancien
@@ -595,6 +598,11 @@ class NavNode():
                         if length_of_path < length_of_old_path:
                             self.path = path
                             rospy.loginfo("Found path : " + str(self.path))
+                    elif path == None:
+                        rospy.logwarn("Pas de trajectoire")
+                        self.publish_pic_msg(self.position)
+                        self.action_result_pub.publish(False)
+
                 else:
                     #rospy.loginfo("Chemin non obstrué")
                     pass
@@ -644,6 +652,7 @@ if __name__ == '__main__':
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
     action_done_topic = rospy.get_param('~action_done_topic', '/robot_1/action_done')
+    nav_node_result_topic = rospy.get_param('~nav_node_result_topic', '/robot_1/nav_node_result')
     max_iter = rospy.get_param('~max_iter', 15)
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
@@ -657,6 +666,7 @@ if __name__ == '__main__':
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
     action_done_pub = rospy.Publisher(action_done_topic, Bool, queue_size=1)
+    result_pub = rospy.Publisher(nav_node_result_topic, Bool, queue_size=1)
 
     # Création de la classe NavigationNode
     Nav_node = NavNode(action_orders_pub=action_orders_pub, 
