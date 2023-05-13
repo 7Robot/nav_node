@@ -78,7 +78,8 @@ class NavNode():
         if self.debug:
             # Launch callback every 100ms
             self.react_pub = rospy.Publisher('/robot_2/positions_topic', MergedDataBis, queue_size=1)
-            rospy.Timer(rospy.Duration(0.1), self.debug_callback)
+            self.react_pub_pos = rospy.Publisher('/robot_2/Odom', RobotData, queue_size=1)
+            rospy.Timer(rospy.Duration(0.5), self.debug_callback)
             self.t = 0  
 
         rospy.loginfo("Nav node initialized with shape : " + str(self.shape_board))
@@ -329,12 +330,14 @@ class NavNode():
         points = np.linspace(self.path[0], self.position, int(np.linalg.norm(np.array(self.path[0]) - np.array(self.position))/0.01))
         for point in points:
                 if self.is_obstacle(point[0], point[1]):
+                    rospy.loginfo("Obstacle :" + str(point))
                     return True
         for i in range(len(self.path)-1):
             # Find each cm of the path
             points = np.linspace(self.path[i], self.path[i+1], int(np.linalg.norm(np.array(self.path[i+1]) - np.array(self.path[i]))/0.01))
             for point in points:
                 if self.is_obstacle(point[0], point[1]):
+                    rospy.loginfo("Obstacle :" + str(point))
                     return True
         #rospy.loginfo("No obstacle on the path")
         #rospy.loginfo("Obstacles :" + str(self.obstacles))
@@ -630,6 +633,7 @@ class NavNode():
 
     def debug_callback(self, data):
         self.t += 1
+        rospy.loginfo("Debug callback")
         msg = MergedDataBis()
         if type(self.next_goal) == type(None):
             following_point = self.position
@@ -644,7 +648,10 @@ class NavNode():
         msg.ennemi_1 = [Trajectoire()]
         msg.ennemi_1[0].position = Point(0, 0, 0)
         msg.ennemi_2 = [Trajectoire()]
-        msg.ennemi_2[0].position = Point(1.5, (1.2-self.t*0.002)%2, 0)
+        msg.ennemi_2[0].position = Point(1.5, 1, 0)
+
+        msg2 = RobotData()
+        msg2.position = Point(following_point[0], following_point[1], 0)
 
 
         try:
@@ -655,6 +662,7 @@ class NavNode():
             self.prec_position = self.position
             rospy.loginfo("[DEBUG] Publishing : " + str(following_point))
         self.react_pub.publish(msg)
+        self.react_pub_pos.publish(msg2)
 if __name__ == '__main__':
 
     rospy.init_node('nav_node', anonymous=False)
