@@ -502,6 +502,7 @@ class NavNode():
 
         self.obstacles_processing(liste_obstacle)
 
+        """
         if self.is_in_obstacle:
             if not(self.is_obstacle(self.position[0], self.position[1])):
                 self.is_in_obstacle = False
@@ -515,7 +516,9 @@ class NavNode():
                     self.action_result_pub.publish(False)
             else:
                 return None
-        
+        """
+
+    
         if type(self.next_goal) != type(None) and not(self.is_in_obstacle):
             if np.linalg.norm(self.position - self.next_goal) < self.distance_interpoint:
                 if len(self.path) > 2:
@@ -535,7 +538,8 @@ class NavNode():
             else:
                 #rospy.loginfo("Dist : " +str(np.linalg.norm(self.position - self.next_goal)))
                 pass
-
+        elif self.position_goal is not None:
+            self.master_path(self.position, self.position_goal)
         else:
             return None
 
@@ -572,6 +576,7 @@ class NavNode():
             #On ajoute les obstacles à la carte
             self.add_obstacles(liste_obstacle)
 
+            """
             # On met à jour le chemin si un obstacle se trouve dessus
             if self.position_goal is not None:
                 if self.verify_path():
@@ -608,6 +613,7 @@ class NavNode():
                 else:
                     #rospy.loginfo("Chemin non obstrué")
                     pass
+            """
 
     def chgt_base_plateau_to_robot(self, point):
         cos_angle = np.cos(self.orientation)
