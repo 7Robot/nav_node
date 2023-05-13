@@ -522,8 +522,10 @@ class NavNode():
         """
 
     
-        if type(self.next_goal) != type(None) and not(self.is_in_obstacle):
-            if np.linalg.norm(self.position - self.next_goal) < self.distance_interpoint:
+        if type(self.next_goal) != type(None) and not(self.is_in_obstacle):    
+            if self.position_goal is not None:
+                self.master_path(self.position, self.position_goal)
+            elif np.linalg.norm(self.position - self.next_goal) < self.distance_interpoint:
                 if len(self.path) > 2:
                     self.path.pop(0)
                     self.next_goal = self.get_next_pos()
@@ -541,8 +543,6 @@ class NavNode():
             else:
                 #rospy.loginfo("Dist : " +str(np.linalg.norm(self.position - self.next_goal)))
                 pass
-        elif self.position_goal is not None:
-            self.master_path(self.position, self.position_goal)
         else:
             return None
 
