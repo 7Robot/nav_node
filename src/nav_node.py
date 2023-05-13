@@ -10,7 +10,6 @@ from tool_lidar.objet import ChooseColor
 import tool_lidar.variable_globale as tool_glob
 import tool_lidar.publisher as tool_pub
 import numpy as np
-import time
 
 class NavNode():
     def __init__(self,
