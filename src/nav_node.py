@@ -452,6 +452,8 @@ class NavNode():
             self.position_goal = self.position
             self.path = [np.array(self.position)]
         
+    def 
+
     def publish_pic_msg(self, next_goal, more_param = 0):
         """
         Publie un message ordonnant au robot de suivre le chemin "path"
