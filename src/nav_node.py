@@ -21,7 +21,6 @@ class NavNode():
                  max_radius = 0.45, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
-                 emergency_stop_distance = 0,
                  color = "Green",
                  name_robot = "Han7",
                  debug = False,
@@ -63,7 +62,6 @@ class NavNode():
 
         self.distance_interpoint = distance_interpoint
         self.next_goal = None
-        self.emergency_stop_distance = emergency_stop_distance
 
         self.action_orders_pub = action_orders_pub
         self.action_done_pub = action_done_pub
@@ -482,13 +480,14 @@ class NavNode():
         # marker_arr.markers.append(marker)
         # pub_marker.publish(marker_arr)
     
-    def emergency_stop(self):
+    def emergency_stop_callback(self, msg):
         """
         Stoppe le robot
         """
-        self.path=[self.position]
-        rospy.logwarn("STOP")
-        
+        if msg.data == False:
+            self.publish_pic_msg(self.next_goal)
+            rospy.loginfo("Reprise du chemin")
+
     def position_callback(self, msg):
         """
         Callback pour récupérer la position des robots
@@ -548,15 +547,7 @@ class NavNode():
 
             #On ajoute les obstacles à la carte
             self.add_obstacles(liste_obstacle)
-      
-    def chgt_base_plateau_to_robot(self, point):
-        cos_angle = np.cos(self.orientation)
-        sin_angle = np.sin(self.orientation)
-        point_transforme_to_robot = np.array([0,0])
-        point_transforme_to_robot[0] = (point[0] - self.position[0]) * cos_angle + (point[1] - self.position[1]) * sin_angle
-        point_transforme_to_robot[1] = (self.position[0] - point[0]) * sin_angle + (point[1] - self.position[1]) * cos_angle
-        return point_transforme_to_robot
-
+    
     def activation_callback(self, msg):
         self.position_callback = None
         self.next_goal = None
@@ -601,11 +592,11 @@ if __name__ == '__main__':
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
     action_done_topic = rospy.get_param('~action_done_topic', '/robot_1/action_done')
+    emergency_topic = rospy.get_param('~emergency_topic', '/robot_1/obstacle_detected')
     nav_node_result_topic = rospy.get_param('~nav_node_result_topic', '/robot_1/nav_node_result')
     max_iter = rospy.get_param('~max_iter', 15)
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
-    emergency_stop_distance = rospy.get_param('~emergency_stop_distance', 0.2) #m
     positions_topic = rospy.get_param('~positions_topic', '/robot_1/positions_topic') 
     color = rospy.get_param('~color', 'Debug')
     debug_mode = rospy.get_param('~debug_mode', False)
@@ -621,10 +612,10 @@ if __name__ == '__main__':
     # Création de la classe NavigationNode
     Nav_node = NavNode(action_orders_pub=action_orders_pub, 
                        action_result_pub=result_pub,
+                       emergency_topic=emergency_topic,
                        distance_interpoint=distance_interpoint, 
                        margin=margin, 
                        max_iter=max_iter,
-                       emergency_stop_distance=emergency_stop_distance,
                        color=color,
                        name_robot=name_robot,
                        debug = debug_mode,
@@ -635,6 +626,7 @@ if __name__ == '__main__':
     rospy.Subscriber(positions_topic, MergedDataBis, Nav_node.position_callback)
     rospy.Subscriber(activate_topic, Bool, Nav_node.activation_callback)
     rospy.Subscriber(odometry_topic, RobotData, Nav_node.odometry_callback)
+    rospy.Subscriber(emergency_topic, Bool, Nav_node.emergency_stop_callback)
 
     for k in range(Nav_node.map_obstacles.shape[0]//1):
         for l in range(Nav_node.map_obstacles.shape[1]//1):
