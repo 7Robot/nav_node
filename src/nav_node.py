@@ -451,8 +451,6 @@ class NavNode():
             rospy.loginfo("Cible atteinte")
             self.position_goal = self.position
             self.path = [np.array(self.position)]
-        
-    def 
 
     def publish_pic_msg(self, next_goal, more_param = 0):
         """
