@@ -2,7 +2,7 @@ import rospy, rospkg
 from geometry_msgs.msg import Point
 from obstacle_detector.msg import Obstacles
 from cdf_msgs.msg import Pic_Action, RobotData, MergedDataBis, Trajectoire
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from visualization_msgs.msg import MarkerArray, Marker
 from tool_lidar.objet import ChooseColor
 
@@ -21,10 +21,8 @@ class NavNode():
                  max_radius = 0.45, 
                  max_iter = 15, 
                  distance_interpoint = 0.03, 
-                 color = "Green",
                  name_robot = "Han7",
-                 debug = False,
-                 activation_topic = "/robot_1/activation_nav_node",):
+                 debug = False):
         self.pub_marker = rospy.Publisher(rospy.get_param("~pub_marker_next_pos", "/robot_1/marker_next_pos"), MarkerArray, queue_size = 10)
         self.path = []
         self.margin = margin
@@ -36,28 +34,17 @@ class NavNode():
 
         rospack = rospkg.RosPack()
         rospack.list()
-        if color == "Green":
-            self.static_obstacles = np.load("{}/src/map/green_nostealing.npy".format(rospack.get_path('nav_node')))
-            rospy.loginfo("Green map loaded")
-        elif color == "Blue":
-            self.static_obstacles = np.load("{}/src/map/blue_nostealing.npy".format(rospack.get_path('nav_node')))
-            rospy.loginfo("Blue map loaded")
-        elif color == "Debug":
-            self.static_obstacles = np.load("{}/src/map/debug.npy".format(rospack.get_path('nav_node')))
-            rospy.loginfo("Debug map loaded")
-        elif color == "Debug border":
-            self.static_obstacles = np.load("{}/src/map/debug_border.npy".format(rospack.get_path('nav_node')))
-            rospy.loginfo("Debug map with border loaded")
-        else:
-            rospy.logerr("Color not recognized")
-            exit()
+
+        self.static_obstacles = np.load("{}/src/map/base.npy".format(rospack.get_path('nav_node')))
+        self.dict_map ={}
+        self.load_all_maps()
+
         self.map_obstacles = self.static_obstacles.copy()
 
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
         
         self.position = pos
-        self.velocity = np.zeros((1,3))
         self.orientation = 0
 
         self.distance_interpoint = distance_interpoint
@@ -81,6 +68,50 @@ class NavNode():
             self.t = 0  
 
         rospy.loginfo("Nav node initialized with shape : " + str(self.shape_board))
+
+    def load_all_maps(self):
+        rospack = rospkg.RosPack()
+        rospack.list()
+        l = {}
+        j1 = np.load("{}/src/map/j1.npy".format(rospack.get_path('nav_node')))
+        j2 = np.load("{}/src/map/j2.npy".format(rospack.get_path('nav_node')))
+        j3 = np.load("{}/src/map/j3.npy".format(rospack.get_path('nav_node')))
+        j4 = np.load("{}/src/map/j4.npy".format(rospack.get_path('nav_node')))
+        r1 = np.load("{}/src/map/r1.npy".format(rospack.get_path('nav_node')))
+        r2 = np.load("{}/src/map/r2.npy".format(rospack.get_path('nav_node')))
+        r3 = np.load("{}/src/map/r3.npy".format(rospack.get_path('nav_node')))
+        r4 = np.load("{}/src/map/r4.npy".format(rospack.get_path('nav_node')))
+        p1 = np.load("{}/src/map/p1.npy".format(rospack.get_path('nav_node')))
+        p2 = np.load("{}/src/map/p2.npy".format(rospack.get_path('nav_node')))
+        p3 = np.load("{}/src/map/p3.npy".format(rospack.get_path('nav_node')))
+        p4 = np.load("{}/src/map/p4.npy".format(rospack.get_path('nav_node')))
+        p5 = np.load("{}/src/map/p5.npy".format(rospack.get_path('nav_node')))
+        p6 = np.load("{}/src/map/p6.npy".format(rospack.get_path('nav_node')))
+        p7 = np.load("{}/src/map/p7.npy".format(rospack.get_path('nav_node')))
+        p8 = np.load("{}/src/map/p8.npy".format(rospack.get_path('nav_node')))
+        p9 = np.load("{}/src/map/p9.npy".format(rospack.get_path('nav_node')))
+        p10 = np.load("{}/src/map/p10.npy".format(rospack.get_path('nav_node')))
+
+        l["j1"] = j1
+        l["j2"] = j2
+        l["j3"] = j3
+        l["j4"] = j4
+        l["r1"] = r1
+        l["r2"] = r2
+        l["r3"] = r3
+        l["r4"] = r4
+        l["p1"] = p1
+        l["p2"] = p2
+        l["p3"] = p3
+        l["p4"] = p4
+        l["p5"] = p5
+        l["p6"] = p6
+        l["p7"] = p7
+        l["p8"] = p8
+        l["p9"] = p9
+        l["p10"] = p10
+
+        self.dict_map = l
 
     def find_middle_obstacles(self, path, path_portion : int):
         """
@@ -395,7 +426,6 @@ class NavNode():
                 liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
             if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
-            self.velocity = np.array([msg.robot_1[-1].vitesse.x, msg.robot_1[-1].vitesse.y, msg.robot_1[-1].vitesse.z])
         elif self.name_robot == "Gret7" :
             liste_obstacle = []
             if not(msg.robot_1[-1].position.x == 0 and msg.robot_1[-1].position.y == 0):
@@ -404,7 +434,6 @@ class NavNode():
                 liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
             if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
-            self.velocity = np.array([msg.robot_2[-1].vitesse.x, msg.robot_2[-1].vitesse.y, msg.robot_2[-1].vitesse.z])
         else :
             rospy.logerr("Nom de robot non reconnu")    
         return liste_obstacle
@@ -585,6 +614,19 @@ class NavNode():
         self.react_pub.publish(msg)
         self.react_pub_pos.publish(msg2)
 
+    def load_map_callback(self, s):
+        """
+        Callback pour récupérer la map
+        """
+        l = len(s.data)
+        map = np.array(self.map_obstacles.shape)
+        for i in range(l//2):
+            add_map = self.dict_map[s.data[2*i:2*i+2]]
+            map = np.logical_or(map, add_map)
+        self.map_obstacles = map
+
+        
+
 if __name__ == '__main__':
 
     rospy.init_node('nav_node', anonymous=False)
@@ -603,6 +645,7 @@ if __name__ == '__main__':
     name_robot = rospy.get_param('~name_robot', 'Han7')
     activate_topic = rospy.get_param('~activate_topic', '/robot_1/activation_nav_node')
     odometry_topic = rospy.get_param('~odometry_topic', '/robot_1/Odom')
+    obstacle_map_topic = rospy.get_param('~obstacle_map_topic', '/robot_1/nav_node_obstacle_map')
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
@@ -627,12 +670,7 @@ if __name__ == '__main__':
     rospy.Subscriber(activate_topic, Bool, Nav_node.activation_callback)
     rospy.Subscriber(odometry_topic, RobotData, Nav_node.odometry_callback)
     rospy.Subscriber(emergency_topic, Bool, Nav_node.emergency_stop_callback)
-
-    for k in range(Nav_node.map_obstacles.shape[0]//1):
-        for l in range(Nav_node.map_obstacles.shape[1]//1):
-            if Nav_node.is_obstacle(k/100, l/100):
-                print(str((k/100,l/100)) + " : " + str(Nav_node.is_obstacle(k/100, l/100)))
-
+    rospy.Subscriber(obstacle_map_topic, String, Nav_node.load_map_callback)
 
     # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
