@@ -29,8 +29,7 @@ class NavNode():
         self.position_goal = None
         self.max_iter = max_iter
         self.debug = debug
-        self.activate = True
-        self.new_path = False
+        self.standby = False
 
         rospack = rospkg.RosPack()
         rospack.list()
@@ -285,8 +284,7 @@ class NavNode():
             iter += 1
             middle = self.find_middle_obstacles(path, path_portion)
             if type(middle) == type(None):
-                self.path = [np.array(self.position)]
-                self.new_path = True
+                self.path = None
                 rospy.logwarn("Pas de trajectoire 1")
                 return None
             elif middle:
@@ -295,8 +293,7 @@ class NavNode():
                 if type(detour) != type(None):
                     path.insert(path_portion+1, detour)
                 else:
-                    self.path = [np.array(self.position)]
-                    self.new_path = True
+                    self.path = None
                     rospy.logwarn("Pas de trajectoire 2")
                     return None
             else:
@@ -319,8 +316,7 @@ class NavNode():
 
         if apply:
             self.path = path
-            rospy.loginfo("Found path hkbiunin : " + str(self.path))
-            self.new_path = True
+            rospy.loginfo("Found path : " + str(self.path))
             return True
         else:
             return path
@@ -490,9 +486,6 @@ class NavNode():
             - path : liste\n
                 Liste ordonnée des noeuds constituant le chemin
         """
-        #rospy.loginfo("Going to : " + str(next_goal))
-        if not(self.activate): # Si le nav_node n'est pas activé
-            return None
         
 
         msg = Pic_Action()
@@ -501,19 +494,15 @@ class NavNode():
         msg.action_msg += ' ' + str(next_goal[0]) + ' ' + str(next_goal[1]) + ' ' + str(more_param)
 
         self.action_orders_pub.publish(msg)
-        # marker_arr = MarkerArray()
-        # if self.name_robot == "Han7":
-        #     marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_1/fuzed")
-        # else:
-        #     marker = tool_pub.create_marker(800, 3, 0, 0.1, 0.1, next_goal[0], next_goal[1], ChooseColor(0, 1, 0), scale_z=0.15, frame_id = "/robot_2/fuzed")
-        # marker_arr.markers.append(marker)
-        # pub_marker.publish(marker_arr)
     
     def emergency_stop_callback(self, msg):
         """
         Stoppe le robot
         """
-        if msg.data == False:
+        if msg.data == True:
+            self.standby = True
+        elif msg.data == False:
+            self.standby = False
             self.publish_pic_msg(self.next_goal)
             rospy.loginfo("Reprise du chemin")
 
@@ -528,6 +517,9 @@ class NavNode():
             marker_array.markers.append(marker_pos_other)
             self.pub_marker.publish(marker_array)
         
+        if self.standby:
+            return None
+
         old_position = self.position
  
         liste_obstacle = self.assign_position(msg)
@@ -541,7 +533,7 @@ class NavNode():
                     self.path.pop(0)
                     self.next_goal = self.get_next_pos()
                     if len(self.path) == 2:
-                        self.publish_pic_msg(self.next_goal, 1)
+                        self.publish_pic_msg(self.next_goal)
                     else:
                         self.publish_pic_msg(self.next_goal)
                 elif len(self.path) == 1:
@@ -578,9 +570,8 @@ class NavNode():
             self.add_obstacles(liste_obstacle)
     
     def activation_callback(self, msg):
-        self.position_callback = None
+        self.position_goal = None
         self.next_goal = None
-        self.activation = msg.data
 
     def debug_callback(self, data):
         self.t += 1
