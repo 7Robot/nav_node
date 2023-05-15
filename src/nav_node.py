@@ -655,7 +655,6 @@ if __name__ == '__main__':
     # Création de la classe NavigationNode
     Nav_node = NavNode(action_orders_pub=action_orders_pub, 
                        action_result_pub=result_pub,
-                       emergency_topic=emergency_topic,
                        distance_interpoint=distance_interpoint, 
                        margin=margin, 
                        max_iter=max_iter,
