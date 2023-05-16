@@ -28,3 +28,23 @@ Le chemin est mis à jour (c'est à dire recalculé) si et seulement si :
 * Un des obstacles a bougé de plus de 5cm (*fonction obstacle_variation*) ET le chemin est dorénavant obstrué (*fonction verify_path*)
 
 * Si un obstacle a bougé de plus de 5 cm et que le nouveau chemin qui serait trouvé est plus court que l'ancien
+
+## Guide d'utilisation
+
+### Lancement d'un objectif en position 
+
+Pour lancer un objectif en position, il faut publier un objet de la classe std_msgs/Point sur le topic /robot_x/position_goal (La coordonnée en z n'importe pas).
+Le robot va se mettre en mouvement pour atteindre cette position.
+
+### Arrivé à destination
+
+Lorsque le robot est arrivé à destination, il publie un message de type std_msgs/Bool sur le topic /robot_x/nav_node_result, il renvoie le message True, une fois arrivé.
+
+### Il n'y a pas de chemin
+
+Le nav_node va renvoyer dans le topic /robot_x/nav_node_result, le message False.
+
+### Je souhaite stopper le nav_node
+
+Pour stopper le nav_node, il suffit d'envoyer un message de type std_msgs/Bool sur le topic /robot_x/activation_nav_node.
+ATTENTION, sachant qu'une position a été envoyée au PIC, le robot ne s'arrêtera pas pour autant.

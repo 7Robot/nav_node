@@ -468,7 +468,6 @@ class NavNode():
             self.pub_marker.publish(marker_array)
             res = self.master_path(self.position, self.position_goal)
             if res == None:
-                self.publish_pic_msg(self.position)
                 self.action_result_pub.publish(False)
             else:
                 # On réduit le rayon de courbure pour tourner sur soi-même
