@@ -13,7 +13,6 @@ for im in liste_images:
 
     a=Image.open("images/"+im)
     a=np.asarray(a)
-    print("Shape : "+str(a.shape))
 
     b=np.zeros((200,300))
     
@@ -22,6 +21,7 @@ for im in liste_images:
                 b[k,j] = a[k,j]==8
     b=np.logical_not(b)
     b=np.transpose(b)
+    print('Shape : ',b.shape)
     
     np.save(im[:-4]+".npy",b)
     

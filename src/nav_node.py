@@ -13,7 +13,6 @@ import numpy as np
 
 class NavNode():
     def __init__(self,
-                 action_done_pub, 
                  action_orders_pub,
                  action_result_pub,
                  margin=0.03, 
@@ -42,15 +41,19 @@ class NavNode():
 
         self.max_radius = max_radius
         self.shape_board = self.map_obstacles.shape
+
+        if self.shape_board[0] == 200:
+            self.map_obstacles = np.transpose(self.map_obstacles)
+            self.static_obstacles = np.transpose(self.static_obstacles)
+            self.shape_board = self.map_obstacles.shape
+            rospy.logwarn("Transposition de la map")
         
         self.position = pos
-        self.orientation = 0
 
         self.distance_interpoint = distance_interpoint
         self.next_goal = None
 
         self.action_orders_pub = action_orders_pub
-        self.action_done_pub = action_done_pub
         self.action_result_pub = action_result_pub
 
         self.name_robot = name_robot
@@ -422,6 +425,8 @@ class NavNode():
                 liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
             if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
+            if not(msg.ennemi_3[-1].position.x == 0 and msg.ennemi_3[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_3[-1].position.x, msg.ennemi_3[-1].position.y]))
         elif self.name_robot == "Gret7" :
             liste_obstacle = []
             if not(msg.robot_1[-1].position.x == 0 and msg.robot_1[-1].position.y == 0):
@@ -430,6 +435,8 @@ class NavNode():
                 liste_obstacle.append(np.array([msg.ennemi_1[-1].position.x, msg.ennemi_1[-1].position.y]))
             if not(msg.ennemi_2[-1].position.x == 0 and msg.ennemi_2[-1].position.y == 0):
                 liste_obstacle.append(np.array([msg.ennemi_2[-1].position.x, msg.ennemi_2[-1].position.y]))
+            if not(msg.ennemi_3[-1].position.x == 0 and msg.ennemi_3[-1].position.y == 0):
+                liste_obstacle.append(np.array([msg.ennemi_3[-1].position.x, msg.ennemi_3[-1].position.y]))
         else :
             rospy.logerr("Nom de robot non reconnu")    
         return liste_obstacle
@@ -441,12 +448,14 @@ class NavNode():
         Get position from odometry
         """
         self.position = np.array([msg.position.x, msg.position.y])
-        self.orientation = msg.position.z
 
     def position_goal_callback(self, msg):
         """
         Callback pour récupérer la position cible
         """
+
+        rospy.loginfo("Shape : " + str(self.map_obstacles.shape))
+
         dist = np.sqrt((msg.x - self.position[0])**2 + (msg.y - self.position[1])**2)
         if dist > 0.01: # Si la position cible est trop loin
             self.position_goal = [msg.x, msg.y]
@@ -510,17 +519,18 @@ class NavNode():
         """
         Callback pour récupérer la position des robots
         """
-        for i, elem in enumerate(self.path):
-            color = ChooseColor(1, 0, 0)
-            marker_array = MarkerArray()
-            marker_pos_other = tool_pub.create_marker(2000 + i, 3, 0, 0.1, 0.1, elem[0], elem[1], color, scale_z=0.15, frame_id="/fuzed") 
-            marker_array.markers.append(marker_pos_other)
-            self.pub_marker.publish(marker_array)
-        
+        try:
+            for i, elem in enumerate(self.path):
+                color = ChooseColor(1, 0, 0)
+                marker_array = MarkerArray()
+                marker_pos_other = tool_pub.create_marker(2000 + i, 3, 0, 0.1, 0.1, elem[0], elem[1], color, scale_z=0.15, frame_id="/fuzed") 
+                marker_array.markers.append(marker_pos_other)
+                self.pub_marker.publish(marker_array)
+        except TypeError:
+            pass
+
         if self.standby:
             return None
-
-        old_position = self.position
  
         liste_obstacle = self.assign_position(msg)
 
@@ -547,10 +557,6 @@ class NavNode():
             else:
                 #rospy.loginfo("Dist : " +str(np.linalg.norm(self.position - self.next_goal)))
                 pass
-        elif self.position_goal is not None:
-                self.master_path(self.position, self.position_goal)
-        else:
-            return None
 
     def obstacles_processing(self, liste_obstacle):
         """
@@ -590,6 +596,8 @@ class NavNode():
         msg.ennemi_1[0].position = Point(0, 0, 0)
         msg.ennemi_2 = [Trajectoire()]
         msg.ennemi_2[0].position = Point(0, 0, 0)
+        msg.ennemi_3 = [Trajectoire()]
+        msg.ennemi_3[0].position = Point(1.2, 1, 0)
 
         msg2 = RobotData()
         msg2.position = Point(following_point[0], following_point[1], 0)
@@ -597,7 +605,7 @@ class NavNode():
 
         try:
             if np.linalg.norm(self.prec_position - self.position)>0.01:
-                rospy.loginfo("[DEBUG] Publishing : " + str(following_point))
+                rospy.loginfo("[DEBUG] Publishing : " + str(following_point) + " with ennemies : " + str(msg.ennemi_3[0].position))
                 self.prec_position = self.position
         except AttributeError:
             self.prec_position = self.position
@@ -624,23 +632,20 @@ if __name__ == '__main__':
     pub_marker = rospy.Publisher(rospy.get_param("~pub_marker_other", "/robot_1/marker_obs"), MarkerArray, queue_size = 10)
     position_goal_topic = rospy.get_param('~position_goal_topic', '/robot_1/Pos_goal')
     action_orders_topic = rospy.get_param('~action_orders_topic', '/robot_1/action')
-    action_done_topic = rospy.get_param('~action_done_topic', '/robot_1/action_done')
-    emergency_topic = rospy.get_param('~emergency_topic', '/robot_1/obstacle_detected')
     nav_node_result_topic = rospy.get_param('~nav_node_result_topic', '/robot_1/nav_node_result')
     max_iter = rospy.get_param('~max_iter', 15)
     distance_interpoint = rospy.get_param('~distance_interpoint', 0.03)
     margin = rospy.get_param('~margin', 0.1) #m
+    emergency_topic = rospy.get_param('~emergency_topic', '/robot_1/obstacle_detected')
     positions_topic = rospy.get_param('~positions_topic', '/robot_1/positions_topic') 
-    color = rospy.get_param('~color', 'Debug')
-    debug_mode = rospy.get_param('~debug_mode', False)
     name_robot = rospy.get_param('~name_robot', 'Han7')
+    debug_mode = rospy.get_param('~debug_mode', False)
     activate_topic = rospy.get_param('~activate_topic', '/robot_1/activation_nav_node')
     odometry_topic = rospy.get_param('~odometry_topic', '/robot_1/Odom')
     obstacle_map_topic = rospy.get_param('~obstacle_map_topic', '/robot_1/nav_node_obstacle_map')
 
     # Déclaration des Publishers
     action_orders_pub = rospy.Publisher(action_orders_topic, Pic_Action, queue_size=1)
-    action_done_pub = rospy.Publisher(action_done_topic, Bool, queue_size=1)
     result_pub = rospy.Publisher(nav_node_result_topic, Bool, queue_size=1)
 
     # Création de la classe NavigationNode
@@ -649,10 +654,8 @@ if __name__ == '__main__':
                        distance_interpoint=distance_interpoint, 
                        margin=margin, 
                        max_iter=max_iter,
-                       color=color,
                        name_robot=name_robot,
-                       debug = debug_mode,
-                       action_done_pub=action_done_pub)
+                       debug = debug_mode)
 
     # Déclaration des Subscribers
     rospy.Subscriber(position_goal_topic, Point, Nav_node.position_goal_callback)
@@ -662,7 +665,6 @@ if __name__ == '__main__':
     rospy.Subscriber(emergency_topic, Bool, Nav_node.emergency_stop_callback)
     rospy.Subscriber(obstacle_map_topic, String, Nav_node.load_map_callback)
 
-    # Vérification de la présence d'obstacle sur le chemin du robot
     while not rospy.is_shutdown():
 
         rospy.sleep(0.05)
