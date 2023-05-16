@@ -53,3 +53,5 @@ ATTENTION, sachant qu'une position a été envoyée au PIC, le robot ne s'arrêt
 
 Pour charger des obstacles statiques il suffit d'envoyer sur le topic /robot_x/nav_node_obstacle_map un message de type std_msgs/String, contenant à la suite la liste des obstacles à éviter.
 Exemple : "r2m1p3p4", évitera les gateaux r2 et m1 ainsi que les plats 3 et 4.
+N.B. : Les cerises sont toujours prises en compte.
+N.B.2: Pour adresser le plat 10, il faut s'adresser à p0 (nav_node séquence les instructions par tranche de 2 caractères)

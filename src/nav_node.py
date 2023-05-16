@@ -111,7 +111,7 @@ class NavNode():
         l["p7"] = p7
         l["p8"] = p8
         l["p9"] = p9
-        l["p10"] = p10
+        l["p0"] = p10
 
         self.dict_map = l
 
@@ -620,8 +620,11 @@ class NavNode():
         l = len(s.data)
         map = self.map_obstacles
         for i in range(l//2):
-            add_map = self.dict_map[s.data[2*i:2*i+2]]
-            map = np.logical_or(map, add_map)
+            try:
+                add_map = self.dict_map[s.data[2*i:2*i+2]]
+                map = np.logical_or(map, add_map)
+            except KeyError:
+                rospy.logerr("Carte : "+s.data[2*i:2*i+2]+" inexistante")
         self.map_obstacles = map
 
         
