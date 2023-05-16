@@ -93,6 +93,10 @@ class NavNode():
         p8 = np.load("{}/src/map/p8.npy".format(rospack.get_path('nav_node')))
         p9 = np.load("{}/src/map/p9.npy".format(rospack.get_path('nav_node')))
         p10 = np.load("{}/src/map/p10.npy".format(rospack.get_path('nav_node')))
+        m1 = np.load("{}/src/map/m1.npy".format(rospack.get_path('nav_node')))
+        m2 = np.load("{}/src/map/m2.npy".format(rospack.get_path('nav_node')))
+        m3 = np.load("{}/src/map/m3.npy".format(rospack.get_path('nav_node')))
+        m4 = np.load("{}/src/map/m4.npy".format(rospack.get_path('nav_node')))
 
         l["j1"] = j1
         l["j2"] = j2
