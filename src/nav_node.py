@@ -264,17 +264,15 @@ class NavNode():
         Calculate the path to go from start to end
         """
 
-        """ if self.is_obstacle(start[0], start[1]) or self.is_obstacle(end[0], end[1]):
+        if self.is_obstacle(start[0], start[1]) or self.is_obstacle(end[0], end[1]):
             # rospy.logwarn("Départ ou arrivée dans un obstacle")
             if self.is_obstacle(start[0], start[1]):
-                # rospy.logwarn("Départ dans un obstacle, on le quitte")
+                rospy.logerr("Départ dans un obstacle")
                 #TODO : Fiabiliser la sortie d'obstacle
-                self.get_out_of_obstacle()
+                #self.get_out_of_obstacle()
                 return None
             else:
-                rospy.logwarn("Arrivée dans un obstacle ! Pas de chemin : " + str(end))
-                rospy.logwarn("Obstacles : "+str(self.obstacles))
-        """
+                rospy.logerr("Arrivée dans un obstacle ! Pas de chemin : " + str(end))
         path = [start, end]
         self.position_goal = end
 
@@ -293,6 +291,7 @@ class NavNode():
             elif middle:
                 detour = self.find_normal_non_obstacle(middle[0], middle[1])
                 rospy.loginfo("Detour trouvé : " + str(detour))
+                rospy.loginfo("Current Path : "+str(path))
                 if type(detour) != type(None):
                     path.insert(path_portion+1, detour)
                 else:
@@ -373,6 +372,8 @@ class NavNode():
         return False
     
     def add_obstacles(self, liste_obstacle):
+        return None
+
         self.obstacles = liste_obstacle
 
         ## On ne garde que les obstacles qui sont sur le plateau ou à moins de 50cm du plateau
@@ -471,13 +472,6 @@ class NavNode():
                 self.action_result_pub.publish(False)
             else:
                 # On réduit le rayon de courbure pour tourner sur soi-même
-                msg_rayoncourbure = Pic_Action()
-
-                msg_rayoncourbure.action_destination = 'motor'
-                msg_rayoncourbure.action_msg = 'setrayoncourbure'
-                msg_rayoncourbure.action_msg += ' ' + str(0.001)
-
-                self.action_orders_pub.publish(msg_rayoncourbure)
 
                 self.get_next_pos()
                 self.publish_pic_msg(self.next_goal)
@@ -497,6 +491,12 @@ class NavNode():
         """
         
 
+        msg_rayoncourbure = Pic_Action()
+        msg_rayoncourbure.action_destination = 'motor'
+        msg_rayoncourbure.action_msg = 'setrayoncourbe'
+        msg_rayoncourbure.action_msg += ' ' + str(0.001)
+        self.action_orders_pub.publish(msg_rayoncourbure)
+
         msg = Pic_Action()
         msg.action_destination = 'motor'
         msg.action_msg = 'moveavant'
@@ -512,8 +512,9 @@ class NavNode():
             self.standby = True
         elif msg.data == False:
             self.standby = False
-            self.publish_pic_msg(self.next_goal)
-            rospy.loginfo("Reprise du chemin")
+            if type(self.next_goal) != type(None):
+                self.publish_pic_msg(self.next_goal)
+                rospy.loginfo("Reprise du chemin")
 
     def position_callback(self, msg):
         """
@@ -618,7 +619,7 @@ class NavNode():
         Callback pour récupérer la map
         """
         l = len(s.data)
-        map = np.array(self.map_obstacles.shape)
+        map = self.map_obstacles
         for i in range(l//2):
             add_map = self.dict_map[s.data[2*i:2*i+2]]
             map = np.logical_or(map, add_map)
