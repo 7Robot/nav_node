@@ -626,6 +626,10 @@ class NavNode():
             except KeyError:
                 rospy.logerr("Carte : "+s.data[2*i:2*i+2]+" inexistante")
         self.map_obstacles = map
+        # On recalcule le chemin
+        if type(self.position_goal) != type(None):
+            self.master_path(self.position, self.position_goal)
+            self.publish_pic_msg(self.next_goal)
 
         
 
