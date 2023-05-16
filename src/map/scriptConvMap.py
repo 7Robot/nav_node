@@ -21,6 +21,7 @@ for im in liste_images:
                 b[k,j] = a[k,j]==8
     b=np.logical_not(b)
     b=np.transpose(b)
+    b=np.flipud(b)
     print('Shape : ',b.shape)
     
     np.save(im[:-4]+".npy",b)

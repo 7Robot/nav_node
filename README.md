@@ -48,3 +48,8 @@ Le nav_node va renvoyer dans le topic /robot_x/nav_node_result, le message False
 
 Pour stopper le nav_node, il suffit d'envoyer un message de type std_msgs/Bool sur le topic /robot_x/activation_nav_node.
 ATTENTION, sachant qu'une position a été envoyée au PIC, le robot ne s'arrêtera pas pour autant.
+
+## Je souhaite charger des obstacles
+
+Pour charger des obstacles statiques il suffit d'envoyer sur le topic /robot_x/nav_node_obstacle_map un message de type std_msgs/String, contenant à la suite la liste des obstacles à éviter.
+Exemple : "r2m1p3p4", évitera les gateaux r2 et m1 ainsi que les plats 3 et 4.
