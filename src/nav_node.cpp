@@ -1,12 +1,24 @@
 #include "nav_node.hpp"
 
+float distance(Point a, Point b){
+    return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
+}
+
+bool is_defined(Point a){
+    return (a.x != -1 && a.y != -1);
+}
+
 Nav_node::Nav_node(){
     //Constructor
     this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>("pic_action", 1000);
     this->result_pub = this->n.advertise<std_msgs::Bool>("result", 1000);
     this->sub_robot_data = this->n.subscribe("robot_data", 1000, &Nav_node::robot_data_callback, this);
     this->standby_sub = this->n.subscribe("standby", 1000, &Nav_node::standby_callback, this);
+    
     this->path = std::vector<Node>();
+    
+    this->robot_goal.x = -1;
+    this->robot_goal.y = -1;
 }
 
 Nav_node::~Nav_node(){
@@ -87,8 +99,9 @@ void Nav_node::main_loop_func(){
 
     // If there is no path, compute one
     if (this->path.empty() && is_defined(this->robot_goal)){
-        // Unexpected error
-        ROS_ERROR("ERROR WHILE NAVIGATING: NO PATH ANYMORE");        
+        // Compute the path
+        this->path = this->astar.compute_path(this->robot_position, this->robot_goal);
+        this->get_next_goal();
     }
     else{
         // If the robot is close enough to the goal, get the next goal
@@ -101,7 +114,6 @@ void Nav_node::main_loop_func(){
             }
         }
     }
-
 }
 
 int main(int argc, char * argv[]){
