@@ -17,6 +17,8 @@ void Astar::set_map(bool map[MAP_WIDTH][MAP_HEIGHT]){
     }
 }
 
+
+
 float Astar::heuristic(Node current, Node end){
     //Calculate the heuristic
     return sqrt(pow(current.x - end.x, 2) + pow(current.y - end.y, 2));

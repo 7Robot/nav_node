@@ -5,6 +5,8 @@
 #include <vector>
 #include "math.h"
 #include "ros/ros.h"
+#include "ros/package.h"
+#include "ros/console.h"
 #include "std_msgs/String.h"
 
 // Nav_node specific
@@ -38,13 +40,16 @@ class Nav_node
         ros::Publisher pub_pic_action;
         ros::Subscriber sub_robot_data;
         ros::Subscriber standby_sub;
+        ros::Subscriber goal_sub;
 
         // Variables
         bool standby;
+        std::vector<Node> path;
 
         // Callbacks
         void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
         void standby_callback(const std_msgs::Bool::ConstPtr& msg);
+        void goal_callback(const geometry_msgs::Point::ConstPtr& msg);
 
         // Functions
         void main_loop_func();
@@ -56,6 +61,11 @@ class Nav_node
         cdf_msgs::RobotData robot_data;
         Point robot_position;
         Point robot_goal;
+
+        Point next_goal;
+
+        // ROS Parameters
+        float goal_tolerance;
 };
 
 
