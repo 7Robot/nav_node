@@ -53,6 +53,7 @@ class Nav_node
 
         // Functions
         void main_loop_func();
+        void get_next_goal();
 
         // Astar objects
         Astar astar;

@@ -68,6 +68,15 @@ void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
     this->get_next_goal();
 }
 
+void Nav_node::get_next_goal(){
+    // Get the next goal
+    this->next_goal = this->path.back();
+    this->path.pop_back();
+
+    // Publish the goal
+    this->publish_pic_msg(this->next_goal, false);
+}
+
 void Nav_node::main_loop_func(){
     if (this->standby){
         // If the robot is in standby, do nothing
