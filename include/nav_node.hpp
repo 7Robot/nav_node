@@ -16,6 +16,7 @@
 #include "cdf_msgs/MergedDataBis.h"
 #include "cdf_msgs/Trajectoire.h"
 #include "geometry_msgs/Point.h"
+#include "std_msgs/Bool.h"
 
 struct Point
 {
@@ -36,9 +37,14 @@ class Nav_node
         ros::NodeHandle n;
         ros::Publisher pub_pic_action;
         ros::Subscriber sub_robot_data;
+        ros::Subscriber standby_sub;
+
+        // Variables
+        bool standby;
 
         // Callbacks
         void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
+        void standby_callback(const std_msgs::Bool::ConstPtr& msg);
 
         // Functions
         void main_loop_func();

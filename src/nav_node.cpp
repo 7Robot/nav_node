@@ -4,6 +4,7 @@ Nav_node::Nav_node(){
     //Constructor
     this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>("pic_action", 1000);
     this->sub_robot_data = this->n.subscribe("robot_data", 1000, &Nav_node::robot_data_callback, this);
+    this->standby_sub = this->n.subscribe("standby", 1000, &Nav_node::standby_callback, this);
 }
 
 Nav_node::~Nav_node(){
@@ -33,8 +34,7 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure)
     this->pub_pic_action.publish(goal_msg);
 }
 
-void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg)
-{
+void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg){
     // Update the robot data
     this->robot_data = *msg;
 
@@ -46,12 +46,21 @@ void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg)
     this->main_loop_func();
 }
 
-void Nav_node::main_loop_func(){
-    // TODO 
+void Nav_node::standby_callback(const std_msgs::Bool::ConstPtr& msg){
+    // Update the standby variable
+    this->standby = msg->data;
 }
 
-int main(int argc, char * argv[])
-{
+void Nav_node::main_loop_func(){
+    if (this->standby){
+        // If the robot is in standby, do nothing
+        return;
+    }
+    
+
+}
+
+int main(int argc, char * argv[]){
     ros::init(argc, argv, "nav_node");
 
     Nav_node nav_node;
