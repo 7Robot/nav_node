@@ -15,6 +15,7 @@
 #include "cdf_msgs/RobotData.h"
 #include "cdf_msgs/MergedDataBis.h"
 #include "cdf_msgs/Trajectoire.h"
+#include "geometry_msgs/Point.h"
 
 struct Point
 {
@@ -28,17 +29,14 @@ class Nav_node
         Nav_node();
         ~Nav_node();
 
+        void publish_pic_msg(Point next_goal, bool rayon_courbure);
+
+
     private:
         // ROS
         ros::NodeHandle n;
-        ros::Subscriber sub_robot_data;
-        ros::Subscriber sub_merged_data;
         ros::Publisher pub_pic_action;
-        ros::Publisher pub_trajectoire;
-
-        // Callbacks
-        void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
-        void merged_data_callback(const cdf_msgs::MergedDataBis::ConstPtr& msg);
+        ros::Subscriber sub_robot_data;
 
         // Astar objects
         Astar astar;
@@ -47,11 +45,7 @@ class Nav_node
         cdf_msgs::RobotData robot_data;
         Point robot_position;
         Point robot_goal;
-        
-
-
-
-}
+};
 
 
 
