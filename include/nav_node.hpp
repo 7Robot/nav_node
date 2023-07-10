@@ -31,12 +31,17 @@ class Nav_node
 
         void publish_pic_msg(Point next_goal, bool rayon_courbure);
 
-
     private:
         // ROS
         ros::NodeHandle n;
         ros::Publisher pub_pic_action;
         ros::Subscriber sub_robot_data;
+
+        // Callbacks
+        void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
+
+        // Functions
+        void main_loop_func();
 
         // Astar objects
         Astar astar;

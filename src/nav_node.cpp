@@ -3,6 +3,7 @@
 Nav_node::Nav_node(){
     //Constructor
     this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>("pic_action", 1000);
+    this->sub_robot_data = this->n.subscribe("robot_data", 1000, &Nav_node::robot_data_callback, this);
 }
 
 Nav_node::~Nav_node(){
@@ -30,6 +31,23 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure)
     
     goal_msg.action_msg = goal_msg_str;
     this->pub_pic_action.publish(goal_msg);
+}
+
+void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg)
+{
+    // Update the robot data
+    this->robot_data = *msg;
+
+    // Update the robot position
+    this->robot_position.x = (this->robot_data.position).x;
+    this->robot_position.y = (this->robot_data.position).y;
+
+    // Activate the navigation
+    this->main_loop_func();
+}
+
+void Nav_node::main_loop_func(){
+    // TODO 
 }
 
 int main(int argc, char * argv[])
