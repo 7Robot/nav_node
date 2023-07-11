@@ -21,7 +21,9 @@ void Astar::set_map(bool map[MAP_WIDTH][MAP_HEIGHT]){
 
 float Astar::heuristic(Node current, Node end){
     //Calculate the heuristic
-    return sqrt(pow(current.x - end.x, 2) + pow(current.y - end.y, 2));
+    int tmp1 = current.x - end.x;
+    int tmp2 = current.y - end.y;
+    return sqrt(tmp1*tmp1 + tmp2*tmp2);
 }
 
 bool Astar::is_valid(int x, int y){
@@ -60,11 +62,14 @@ std::vector<Node> Astar::calculate_path(int startX, int startY, int endX, int en
 
     bool endFound = false;
 
+    int temp;
+
     while(openList.size() > 0){
         //Find the node with the lowest fCost
         float lowestCost = openList[0].fCost;
         int lowestCostIndex = 0;
-        for(int i = 0; i < openList.size(); i++){
+        temp = openList.size();
+        for(int i = 0; i < temp; i++){
             if(openList[i].fCost < lowestCost){
                 lowestCost = openList[i].fCost;
                 lowestCostIndex = i;
@@ -72,6 +77,10 @@ std::vector<Node> Astar::calculate_path(int startX, int startY, int endX, int en
         }
 
         Node currentNode = openList[lowestCostIndex];
+        closedList.push_back(currentNode);
+        openList.erase(openList.begin()+lowestCostIndex);
+           
+
         if(currentNode.x == end.x && currentNode.y == end.y){
             //We have reached the end
             //std::cout << "Path found" << std::endl;
@@ -92,7 +101,8 @@ std::vector<Node> Astar::calculate_path(int startX, int startY, int endX, int en
                     else{
                         bool verifier = true;
                         // Verify if the neighbor is already in the open list
-                        for (int i=0; i<openList.size(); i++){
+                        temp = openList.size();
+                        for (int i=0; i<temp; i++){
                             if (openList[i].x == currentNode.x+x && openList[i].y == currentNode.y+y){
                                 //Skip the neighbor if it is in the open list
                                 verifier = false;
@@ -101,7 +111,8 @@ std::vector<Node> Astar::calculate_path(int startX, int startY, int endX, int en
                         }
                         if (verifier){
                             // Verify if the neighbor is in the closed list
-                            for (int i=0; i<closedList.size(); i++){
+                            temp = closedList.size();
+                            for (int i=0; i<temp; i++){
                                 if (closedList[i].x == currentNode.x+x && closedList[i].y == currentNode.y+y){
                                     //Skip the neighbor if it is in the closed list
                                     verifier = false;
@@ -120,7 +131,7 @@ std::vector<Node> Astar::calculate_path(int startX, int startY, int endX, int en
                                 neighbor.parentX = currentNode.x;
                                 neighbor.parentY = currentNode.y;
                                 if (x==0 || y==0){
-                                    neighbor.gCost = currentNode.gCost + 1;
+                                    neighbor.gCost = currentNode.gCost + 1.;
                                 }
                                 else{
                                     neighbor.gCost = currentNode.gCost + 1.414;
@@ -133,27 +144,22 @@ std::vector<Node> Astar::calculate_path(int startX, int startY, int endX, int en
                         }
                     }
             }
-            //std::cout << "Open list size: " << openList.size() << std::endl;
-            // Add the current node to the closed list
-            closedList.push_back(currentNode);
-            // Remove the current node from the open list
-            openList.erase(openList.begin()+lowestCostIndex);
-            //std::cout << "Changed size to " << openList.size() << std::endl;
-
-        }
+           }
     
         }
         
     }
     if (endFound){
         // Reconstruct the path
+        std::cout << "Reconstructing path" << std::endl;
         std::vector<Node> path;
         Node currentNode = end;
         while (currentNode.x != startX || currentNode.y != startY){
             bool verifier = false;
             path.push_back(currentNode);
             //std::cout << "Searching for parent node"<< currentNode.parentX<< ", "<< currentNode.parentY << std::endl;
-            for (int i=0; i<closedList.size(); i++){
+            temp = closedList.size();
+            for (int i=0; i<temp; i++){
                 if (closedList[i].x == currentNode.parentX && closedList[i].y == currentNode.parentY){
                     currentNode = closedList[i];
                     //std::cout << "Found parent node: " << currentNode.x << ", " << currentNode.y << std::endl;

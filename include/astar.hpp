@@ -2,15 +2,14 @@
 #define ASTAR_HPP
 
 #include "nav_node.hpp"
-#define MAP_WIDTH 150
-#define MAP_HEIGHT 100
+#define MAP_WIDTH 300
+#define MAP_HEIGHT 200
 
 struct Node{
     int x;
     int y;
     int parentX;
     int parentY;
-    bool reachable;
     float gCost;
     float hCost;
     float fCost;

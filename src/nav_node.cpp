@@ -82,8 +82,11 @@ void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
 
 void Nav_node::get_next_goal(){
     // Get the next goal
-    this->next_goal = this->path.back();
+    Node temp = this->path.back();
     this->path.pop_back();
+
+    this->next_goal.x = temp.x;
+    this->next_goal.y = temp.y;
 
     // Publish the goal
     this->publish_pic_msg(this->next_goal, false);
@@ -100,7 +103,7 @@ void Nav_node::main_loop_func(){
     // If there is no path, compute one
     if (this->path.empty() && is_defined(this->robot_goal)){
         // Compute the path
-        this->path = this->astar.compute_path(this->robot_position, this->robot_goal);
+        this->path = this->astar.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
         this->get_next_goal();
     }
     else{
