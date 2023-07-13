@@ -47,6 +47,36 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
     this->pub_pic_action.publish(goal_msg);
 }
 
+void Nav_node::load_map_file(std::string map_file){
+    std::string real_path = ros::package::getPath("nav_node") + "/maps/" + map_file;
+    std::ifstream map_file_stream(real_path);
+    std::string line;
+    std::getline(map_file_stream, line);
+    int length = line.length();
+    int x = 0;
+    int y = 0;
+
+    bool map[MAP_WIDTH][MAP_HEIGHT];
+
+    for (int i = 0; i < length; i++){
+        if (x == MAP_WIDTH){
+            x = 0;
+            y++;
+        }
+        if (y == MAP_HEIGHT){
+            break;
+        }
+        if (line[i] == '0'){
+            map[x][y] = false;
+        }
+        else{
+            map[x][y] = true;
+        }
+    }
+
+    this->nav_alg.set_map(map);
+}
+
 void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg){
     // Update the robot data
     this->robot_data = *msg;

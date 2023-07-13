@@ -4,6 +4,7 @@
 // Standard library
 #include <vector>
 #include "math.h"
+#include "fstream"
 #include "ros/ros.h"
 #include "ros/package.h"
 #include "ros/console.h"
@@ -27,11 +28,13 @@ class Nav_node
         ~Nav_node();
 
         void publish_pic_msg(Point next_goal, bool rayon_courbure);
+        void load_map_file(std::string map_file);
 
     private:
         // ROS
         ros::NodeHandle n;
         ros::Publisher pub_pic_action;
+        ros::Publisher result_pub;
         ros::Subscriber sub_robot_data;
         ros::Subscriber standby_sub;
         ros::Subscriber goal_sub;
