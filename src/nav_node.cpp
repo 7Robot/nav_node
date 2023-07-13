@@ -186,6 +186,7 @@ int main(int argc, char * argv[]){
 
     while (ros::ok())
     {
+        nav_node.main_loop_func();
         ros::spinOnce();
     }
 

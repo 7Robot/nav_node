@@ -34,6 +34,7 @@ class Nav_node
 
         void publish_pic_msg(Point next_goal, bool rayon_courbure);
         void load_map_file(std::string map_file);
+        void main_loop_func();
 
     private:
         // ROS
@@ -54,7 +55,6 @@ class Nav_node
         void goal_callback(const geometry_msgs::Point::ConstPtr& msg);
 
         // Functions
-        void main_loop_func();
         void get_next_goal();
         void obstacle_processing(Circle obstacle[3]);
 
