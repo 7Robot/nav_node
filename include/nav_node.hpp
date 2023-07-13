@@ -36,7 +36,7 @@ class Nav_node
         ros::Publisher pub_pic_action;
         ros::Publisher result_pub;
         ros::Subscriber sub_robot_data;
-        ros::Subscriber standby_sub;
+        ros::Subscriber stop_sub;
         ros::Subscriber goal_sub;
 
         // Variables
@@ -45,7 +45,7 @@ class Nav_node
 
         // Callbacks
         void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
-        void standby_callback(const std_msgs::Bool::ConstPtr& msg);
+        void stop_callback(const std_msgs::Bool::ConstPtr& msg);
         void goal_callback(const geometry_msgs::Point::ConstPtr& msg);
 
         // Functions

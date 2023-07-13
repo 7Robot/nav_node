@@ -13,7 +13,7 @@ Nav_node::Nav_node(){
     this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>("pic_action", 1000);
     this->result_pub = this->n.advertise<std_msgs::Bool>("result", 1000);
     this->sub_robot_data = this->n.subscribe("robot_data", 1000, &Nav_node::robot_data_callback, this);
-    this->standby_sub = this->n.subscribe("standby", 1000, &Nav_node::standby_callback, this);
+    this->stop_sub = this->n.subscribe("standby", 1000, &Nav_node::stop_callback, this);
     
     this->path = std::vector<Point>();
     
@@ -89,9 +89,14 @@ void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg){
     this->main_loop_func();
 }
 
-void Nav_node::standby_callback(const std_msgs::Bool::ConstPtr& msg){
-    // Update the standby variable
+void Nav_node::stop_callback(const std_msgs::Bool::ConstPtr& msg){
+    // Stop everything
     this->standby = msg->data;
+    if (msg->data){
+        this->path = std::vector<Point>();
+        this->robot_goal.x = -1;
+        this->robot_goal.y = -1;
+    }
 }
 
 void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
