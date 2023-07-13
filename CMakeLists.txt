@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -130,7 +131,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME} src/nav_node.cpp src/astar.cpp)
+add_executable(${PROJECT_NAME} src/nav_node.cpp src/pstar.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -179,7 +180,7 @@ target_link_libraries(${PROJECT_NAME}
 ## Mark cpp header files for installation
  install(DIRECTORY include/${PROJECT_NAME}/
    DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
-   FILES_MATCHING PATTERN "*.h"
+   FILES_MATCHING PATTERN "*.hpp"
    PATTERN ".svn" EXCLUDE
  )
 
