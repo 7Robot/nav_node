@@ -10,7 +10,7 @@
 #include "std_msgs/String.h"
 
 // Nav_node specific
-#include "astar.hpp"
+#include "pstar.hpp"
 
 // Messages
 #include "cdf_msgs/Pic_Action.h"
@@ -19,12 +19,6 @@
 #include "cdf_msgs/Trajectoire.h"
 #include "geometry_msgs/Point.h"
 #include "std_msgs/Bool.h"
-
-struct Point
-{
-    int x;
-    int y;
-};
 
 class Nav_node
 {
@@ -44,7 +38,7 @@ class Nav_node
 
         // Variables
         bool standby;
-        std::vector<Node> path;
+        std::vector<Point> path;
 
         // Callbacks
         void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
@@ -55,8 +49,8 @@ class Nav_node
         void main_loop_func();
         void get_next_goal();
 
-        // Astar objects
-        Astar astar;
+        // Navigation algorithm objects
+        PStar nav_alg;
 
         // Robot data
         cdf_msgs::RobotData robot_data;

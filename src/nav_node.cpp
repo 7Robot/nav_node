@@ -15,7 +15,7 @@ Nav_node::Nav_node(){
     this->sub_robot_data = this->n.subscribe("robot_data", 1000, &Nav_node::robot_data_callback, this);
     this->standby_sub = this->n.subscribe("standby", 1000, &Nav_node::standby_callback, this);
     
-    this->path = std::vector<Node>();
+    this->path = std::vector<Point>();
     
     this->robot_goal.x = -1;
     this->robot_goal.y = -1;
@@ -82,7 +82,7 @@ void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
 
 void Nav_node::get_next_goal(){
     // Get the next goal
-    Node temp = this->path.back();
+    Point temp = this->path.back();
     this->path.pop_back();
 
     this->next_goal.x = temp.x;
@@ -103,7 +103,7 @@ void Nav_node::main_loop_func(){
     // If there is no path, compute one
     if (this->path.empty() && is_defined(this->robot_goal)){
         // Compute the path
-        this->path = this->astar.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
+        this->path = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
         this->get_next_goal();
     }
     else{
