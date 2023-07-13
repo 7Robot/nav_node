@@ -25,6 +25,28 @@ Nav_node::~Nav_node(){
     //Destructor
 }
 
+void Nav_node::obstacle_processing(Circle obstacle[3]){
+    // Obstacle variation ?
+    bool variation = false;
+    for (int i = 0; i < 3; i++){
+        variation = true;
+        for (int j = 0; j < 3; j++){
+            if (abs(obstacle[i].radius - this->obstacles[j].radius) > 0.01\
+                && abs(obstacle[i].center.x - this->obstacles[j].center.x) > 0.01\
+                && abs(obstacle[i].center.y - this->obstacles[j].center.y) > 0.01){
+                variation = false;
+                break;
+            }
+        }
+    }
+    if (!variation){
+        // If there is no variation, do nothing
+        return;
+    }
+
+
+}
+
 void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
     if (rayon_courbure){
         // Set the curve to 1 mm
@@ -136,8 +158,6 @@ void Nav_node::main_loop_func(){
         // If the robot is in standby, do nothing
         return;
     }
-
-    //TODO: Obstacle processing
 
     // If there is no path, compute one
     if (this->path.empty() && is_defined(this->robot_goal)){

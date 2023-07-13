@@ -21,6 +21,11 @@
 #include "geometry_msgs/Point.h"
 #include "std_msgs/Bool.h"
 
+struct Circle{
+    Point center;
+    float radius;
+};
+
 class Nav_node
 {
     public:
@@ -51,6 +56,7 @@ class Nav_node
         // Functions
         void main_loop_func();
         void get_next_goal();
+        void obstacle_processing(Circle obstacle[3]);
 
         // Navigation algorithm objects
         PStar nav_alg;
@@ -61,6 +67,7 @@ class Nav_node
         Point robot_goal;
 
         Point next_goal;
+        Circle obstacles[3];
 
         // ROS Parameters
         float goal_tolerance;
