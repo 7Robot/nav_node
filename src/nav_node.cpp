@@ -123,8 +123,8 @@ void Nav_node::stop_callback(const std_msgs::Bool::ConstPtr& msg){
 
 void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
     // Update the goal
-    this->robot_goal.x = msg->x;
-    this->robot_goal.y = msg->y;
+    this->robot_goal.x = static_cast<int>(msg->x*100);
+    this->robot_goal.y = static_cast<int>(msg->y*100);
 
     // Compute the path
     this->path = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
