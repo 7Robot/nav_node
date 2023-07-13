@@ -112,7 +112,11 @@ void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
         this->robot_goal.y = -1;
         return;
     }
-    this->get_next_goal();
+    else{
+        // The path is reachable so we can start the navigation
+        this->standby = false;
+        this->get_next_goal();
+    }
 }
 
 void Nav_node::get_next_goal(){
