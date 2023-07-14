@@ -21,6 +21,16 @@ Nav_node::Nav_node(){
     
     this->robot_goal.x = -1;
     this->robot_goal.y = -1;
+
+    // Get parameters
+    this->n.getParam("/nav_node/robot_number", this->robot_number);
+    this->n.getParam("/nav_node/map_file", this->map_file);
+    this->n.getParam("/nav_node/variation_obs", this->variation_obs);
+    this->n.getParam("/nav_node/normal_radius", this->normal_radius);
+
+    // Load the map
+    this->load_map_file(this->map_file);
+
 }
 
 Nav_node::~Nav_node(){
@@ -88,9 +98,9 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
     for (int i = 0; i < 3; i++){
         variation = true;
         for (int j = 0; j < 3; j++){
-            if (abs(obstacle[i].radius - this->obstacles[j].radius) > 0.01\
-                && abs(obstacle[i].center.x - this->obstacles[j].center.x) > 0.01\
-                && abs(obstacle[i].center.y - this->obstacles[j].center.y) > 0.01){
+            if (abs(obstacle[i].radius - this->obstacles[j].radius) > this->variation_obs\
+                && abs(obstacle[i].center.x - this->obstacles[j].center.x) > this->variation_obs\
+                && abs(obstacle[i].center.y - this->obstacles[j].center.y) > this->variation_obs){
                 variation = false;
                 break;
             }

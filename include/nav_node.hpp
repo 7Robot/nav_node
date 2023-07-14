@@ -70,6 +70,8 @@ class Nav_node
         Point robot_goal;
         int robot_number;
         float normal_radius;
+        float variation_obs;
+        std::string map_file;
 
         Point next_goal;
         Circle obstacles[3];
