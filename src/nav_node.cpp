@@ -1,10 +1,12 @@
 #include "nav_node.hpp"
 
 float distance(Point a, Point b){
+    // Compute the distance between two points
     return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
 }
 
 bool is_defined(Point a){
+    // By default, a point (-1, -1) is undefined
     return (a.x != -1 && a.y != -1);
 }
 
@@ -26,6 +28,10 @@ Nav_node::~Nav_node(){
 }
 
 void Nav_node::obstacle_processing(Circle obstacle[3]){
+    /*
+    Given the three obstacles, this function will place circle on the map
+    */
+
     // Obstacle variation ?
     bool variation = false;
     for (int i = 0; i < 3; i++){
@@ -43,11 +49,13 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
         // If there is no variation, do nothing
         return;
     }
-
-
 }
 
 void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
+    /*
+    This function send position goal to the PIC
+    */
+    
     if (rayon_courbure){
         // Set the curve to 1 mm
         cdf_msgs::Pic_Action curve_msg;
@@ -70,9 +78,16 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
 }
 
 void Nav_node::load_map_file(std::string map_file){
-    std::string real_path = ros::package::getPath("nav_node");
-    real_path += "/maps/" + map_file;
+    /*
+    Given a file filled with a line of size height*width of 0 and 1, 
+    this function will load Nav_node->map with the data
+    */
+    
+    // Get the real path of the file
+    std::string real_path = ros::package::getPath("nav_node") + "/maps/" + map_file;
     std::ifstream map_file_stream(real_path);
+    
+    // Load the line in the map
     std::string line;
     std::getline(map_file_stream, line);
     int length = line.length();
@@ -97,25 +112,28 @@ void Nav_node::load_map_file(std::string map_file){
         }
     }
 
+    // Use accessors to set the map
     this->nav_alg.set_map(map);
 }
 
 void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg){
+    /*
+    Get odometry information from the RobotData topic
+    */
+    
     // Update the robot data
     this->robot_data = *msg;
 
     // Update the robot position
     this->robot_position.x = (this->robot_data.position).x;
     this->robot_position.y = (this->robot_data.position).y;
-
-    // Activate the navigation
-    this->main_loop_func();
 }
 
 void Nav_node::stop_callback(const std_msgs::Bool::ConstPtr& msg){
-    // Stop everything
+    // Stop everything if a message is published to the standby topic
     this->standby = msg->data;
     if (msg->data){
+        // Remove path and goal
         this->path = std::vector<Point>();
         this->robot_goal.x = -1;
         this->robot_goal.y = -1;
@@ -123,6 +141,10 @@ void Nav_node::stop_callback(const std_msgs::Bool::ConstPtr& msg){
 }
 
 void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
+    /*
+    This function will be called when a goal is published to the goal topic
+    */
+    
     // Update the goal
     this->robot_goal.x = static_cast<int>(msg->x*100);
     this->robot_goal.y = static_cast<int>(msg->y*100);
@@ -155,6 +177,11 @@ void Nav_node::get_next_goal(){
 }
 
 void Nav_node::main_loop_func(){
+    /*
+    This loop function is called every 100 ms, it
+    execute the navigation algorithm
+    */
+    
     if (this->standby){
         // If the robot is in standby, do nothing
         return;

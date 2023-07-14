@@ -1,5 +1,10 @@
 #include "nav_node.hpp"
 
+/*
+This file contains the implementation of the P* algorithm
+*/
+
+
 PStar::PStar(){
     //Constructor
 }
@@ -19,7 +24,12 @@ void PStar::set_map(bool map[MAP_WIDTH][MAP_HEIGHT]){
 }
 
 bool PStar::get_cost(Point p){
-    //Get the cost of a node
+    /*
+    This function assign the cost to reach a node p 
+    regarding the 8 node around it.
+
+    Return true if the cost has changed
+    */
     if (this->map[p.x][p.y] == false){
         return false;
     }
@@ -43,6 +53,14 @@ bool PStar::get_cost(Point p){
 }
 
 std::vector<Point> PStar::calculate_path(int startX, int startY, int endX, int endY){
+    /*
+    This function loop until the cost of all the nodes 
+    can't change anymore.
+
+    Ultimately it will calculate the best path from the
+    start point to the end point and return it.
+    */
+    
     Point tmp;
     bool running = true;
     int count = 0;
@@ -52,7 +70,7 @@ std::vector<Point> PStar::calculate_path(int startX, int startY, int endX, int e
     this->map_cost[startX][startY] = 0;
 
     while (running){
-        //std::cout << "Calculating cost... " << count << std::endl;
+        
         count = 0;
         running = false;
         for (int x = 1; x < MAP_WIDTH-1; x++){
