@@ -37,6 +37,41 @@ Nav_node::~Nav_node(){
     //Destructor
 }
 
+void Nav_node::or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_HEIGHT]){
+    /*
+    This function will do a logical OR between two maps and assign it
+    to the first one
+    */
+    
+    for(int x = 0; x < MAP_WIDTH; x++){
+        for(int y = 0; y < MAP_HEIGHT; y++){
+            map[x][y] = map[x][y] || map2[x][y];
+        }
+    }
+}
+
+void Nav_node::make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]){
+    /*
+    Create a map with a circle obstacle
+    */
+    float radius = obstacle.radius * 100;
+    Point center = obstacle.center;
+    center.x = center.x * 100;
+    center.y = center.y * 100;
+
+    for(int x = 0; x < MAP_WIDTH; x++){
+        for(int y = 0; y < MAP_HEIGHT; y++){
+            if (pow(x - center.x, 2) + pow(y - center.y, 2) < pow(radius, 2)){
+                map[x][y] = true;
+            }
+            else{
+                map[x][y] = false;
+            }
+        }
+    }
+
+}
+
 void Nav_node::obstacle_disjunction(cdf_msgs::MergedDataBis MergedData){
     /*
     This function will take the MergedDataBis message and extract the three obstacles
@@ -111,9 +146,18 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
         return;
     }
     else {
+        bool new_map[MAP_WIDTH][MAP_HEIGHT];
+        for (int x = 0; x < MAP_WIDTH; x++){
+            for (int y = 0; y < MAP_HEIGHT; y++){
+                new_map[x][y] = this->base_map[x][y];
+            }
+        }
+        bool temp_map[MAP_WIDTH][MAP_HEIGHT];
         // If there is a variation, update the obstacles
         for (int i = 0; i < 3; i++){
             this->obstacles[i] = obstacle[i];
+            this->make_circle_map(obstacle[i], temp_map);
+            this->or_map(new_map, temp_map);            
         }
     }
 }
@@ -180,6 +224,11 @@ void Nav_node::load_map_file(std::string map_file){
     }
 
     // Use accessors to set the map
+    for (int x = 0; x < MAP_WIDTH; x++){
+        for (int y = 0; y < MAP_HEIGHT; y++){
+            this->base_map[x][y] = map[x][y];
+        }
+    }
     this->nav_alg.set_map(map);
 }
 

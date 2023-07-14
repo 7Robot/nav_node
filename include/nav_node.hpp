@@ -49,6 +49,7 @@ class Nav_node
         // Variables
         bool standby;
         std::vector<Point> path;
+        bool base_map[MAP_WIDTH][MAP_HEIGHT];
 
         // Callbacks
         void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
@@ -60,6 +61,8 @@ class Nav_node
         void get_next_goal();
         void obstacle_processing(Circle obstacle[3]);
         void obstacle_disjunction(cdf_msgs::MergedDataBis obstacles);
+        void or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_HEIGHT]);
+        void make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]);
 
         // Navigation algorithm objects
         PStar nav_alg;
