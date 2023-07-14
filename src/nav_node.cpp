@@ -70,7 +70,8 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
 }
 
 void Nav_node::load_map_file(std::string map_file){
-    std::string real_path = ros::package::getPath("nav_node") + "/maps/" + map_file;
+    std::string real_path = ros::package::getPath("nav_node");
+    real_path += "/maps/" + map_file;
     std::ifstream map_file_stream(real_path);
     std::string line;
     std::getline(map_file_stream, line);
@@ -189,7 +190,6 @@ int main(int argc, char * argv[]){
         nav_node.main_loop_func();
         ros::spinOnce();
     }
-
 }
 
 

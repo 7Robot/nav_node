@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>nav_node</name>
+  <name>nav</name>
   <version>0.0.0</version>
   <description>The nav_node package</description>
 
