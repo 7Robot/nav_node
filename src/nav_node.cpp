@@ -74,6 +74,8 @@ void Nav_node::obstacle_disjunction(cdf_msgs::MergedDataBis MergedData){
     tmp = MergedData.ennemi_2.size();
     obstacle[2].center.x = MergedData.ennemi_2[tmp - 1].position.x;
     obstacle[2].center.y = MergedData.ennemi_2[tmp - 1].position.y;
+
+    this->obstacle_processing(obstacle);
 }
 
 void Nav_node::obstacle_processing(Circle obstacle[3]){
@@ -97,6 +99,12 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
     if (!variation){
         // If there is no variation, do nothing
         return;
+    }
+    else {
+        // If there is a variation, update the obstacles
+        for (int i = 0; i < 3; i++){
+            this->obstacles[i] = obstacle[i];
+        }
     }
 }
 
