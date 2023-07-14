@@ -44,6 +44,7 @@ class Nav_node
         ros::Subscriber sub_robot_data;
         ros::Subscriber stop_sub;
         ros::Subscriber goal_sub;
+        ros::Subscriber obstacles_sub;
 
         // Variables
         bool standby;
@@ -53,10 +54,12 @@ class Nav_node
         void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
         void stop_callback(const std_msgs::Bool::ConstPtr& msg);
         void goal_callback(const geometry_msgs::Point::ConstPtr& msg);
+        void obstacles_callback(const cdf_msgs::MergedDataBis::ConstPtr& msg);
 
         // Functions
         void get_next_goal();
         void obstacle_processing(Circle obstacle[3]);
+        void obstacle_disjunction(cdf_msgs::MergedDataBis obstacles);
 
         // Navigation algorithm objects
         PStar nav_alg;
@@ -65,6 +68,8 @@ class Nav_node
         cdf_msgs::RobotData robot_data;
         Point robot_position;
         Point robot_goal;
+        int robot_number;
+        float normal_radius;
 
         Point next_goal;
         Circle obstacles[3];

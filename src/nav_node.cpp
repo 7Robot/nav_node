@@ -27,6 +27,55 @@ Nav_node::~Nav_node(){
     //Destructor
 }
 
+void Nav_node::obstacle_disjunction(cdf_msgs::MergedDataBis MergedData){
+    /*
+    This function will take the MergedDataBis message and extract the three obstacles
+    */
+
+    Circle obstacle[3];
+
+    if (this->robot_number == 1){
+        auto tmp = MergedData.robot_2.size();
+
+        if (MergedData.robot_2[tmp - 1].position.x == 0 && MergedData.robot_2[tmp - 1].position.y == 0){
+            // Robot 2 is not defined
+            tmp = MergedData.ennemi_3.size();
+            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x;
+            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y;
+        }
+        else{
+            // Robot 2 is defined
+            tmp = MergedData.robot_2.size();
+            obstacle[0].center.x = MergedData.robot_2[tmp - 1].position.x;
+            obstacle[0].center.y = MergedData.robot_2[tmp - 1].position.y;
+        }
+
+    }
+    else{
+        auto tmp = MergedData.robot_1.size();
+        if (MergedData.robot_1[tmp - 1].position.x == 0 && MergedData.robot_1[tmp - 1].position.y == 0){
+            // Robot 1 is not defined
+            auto tmp = MergedData.ennemi_3.size();
+            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x;
+            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y;
+        }
+        else{
+            // Robot 1 is defined
+            auto tmp = MergedData.robot_1.size();
+            obstacle[0].center.x = MergedData.robot_1[tmp - 1].position.x;
+            obstacle[0].center.y = MergedData.robot_1[tmp - 1].position.y;
+        }
+    }
+
+    auto tmp = MergedData.ennemi_1.size();
+    obstacle[1].center.x = MergedData.ennemi_1[tmp - 1].position.x;
+    obstacle[1].center.y = MergedData.ennemi_1[tmp - 1].position.y;
+
+    tmp = MergedData.ennemi_2.size();
+    obstacle[2].center.x = MergedData.ennemi_2[tmp - 1].position.x;
+    obstacle[2].center.y = MergedData.ennemi_2[tmp - 1].position.y;
+}
+
 void Nav_node::obstacle_processing(Circle obstacle[3]){
     /*
     Given the three obstacles, this function will place circle on the map
