@@ -11,22 +11,36 @@ bool is_defined(Point a){
 }
 
 Nav_node::Nav_node(){
-    //Constructor
-    this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>("pic_action", 1000);
-    this->result_pub = this->n.advertise<std_msgs::Bool>("result", 1000);
-    this->sub_robot_data = this->n.subscribe("robot_data", 1000, &Nav_node::robot_data_callback, this);
-    this->stop_sub = this->n.subscribe("standby", 1000, &Nav_node::stop_callback, this);
-    
+    //Constructor    
     this->path = std::vector<Point>();
     
     this->robot_goal.x = -1;
     this->robot_goal.y = -1;
 
     // Get parameters
-    this->n.getParam("/nav_node/robot_number", this->robot_number);
-    this->n.getParam("/nav_node/map_file", this->map_file);
-    this->n.getParam("/nav_node/variation_obs", this->variation_obs);
-    this->n.getParam("/nav_node/normal_radius", this->normal_radius);
+    std::string pic_action_topic;
+    std::string result_topic;
+    std::string robot_data_topic;
+    std::string stop_topic;
+    std::string position_goal_topic;
+
+    this->n.getParam("robot_id", this->robot_number);
+    this->n.getParam("pic_action_topic", pic_action_topic);
+    this->n.getParam("result_topic", result_topic);
+    this->n.getParam("robot_data_topic", robot_data_topic);
+    this->n.getParam("position_goal_topic", position_goal_topic);
+    this->n.getParam("stop_topic", stop_topic);
+    this->n.getParam("normal_radius", this->normal_radius);
+    this->n.getParam("variation_obs", this->variation_obs);
+    this->n.getParam("map_file", this->map_file);
+
+    // Ros Pub and Sub
+
+    this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>(pic_action_topic, 1000);
+    this->result_pub = this->n.advertise<std_msgs::Bool>(result_topic, 1000);
+    this->goal_sub = this->n.subscribe(position_goal_topic, 1000, &Nav_node::goal_callback, this);
+    this->sub_robot_data = this->n.subscribe(robot_data_topic, 1000, &Nav_node::robot_data_callback, this);
+    this->stop_sub = this->n.subscribe(stop_topic, 1000, &Nav_node::stop_callback, this);
 
     // Load the map
     this->load_map_file(this->map_file);
