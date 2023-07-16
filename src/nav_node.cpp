@@ -1,4 +1,4 @@
-#include "nav_node.hpp"
+#include "nav_node/nav_node.hpp"
 
 float distance(Point a, Point b){
     // Compute the distance between two points

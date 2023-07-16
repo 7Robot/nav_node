@@ -5,21 +5,14 @@
 #include <vector>
 #include "math.h"
 #include "fstream"
-#include "ros/ros.h"
-#include "ros/package.h"
-#include "ros/console.h"
-#include "std_msgs/String.h"
+#include "rclcpp/rclcpp.hpp"
 
 // Nav_node specific
-#include "pstar.hpp"
+#include "nav_node/pstar.hpp"
 
 // Messages
-#include "cdf_msgs/Pic_Action.h"
-#include "cdf_msgs/RobotData.h"
-#include "cdf_msgs/MergedDataBis.h"
-#include "cdf_msgs/Trajectoire.h"
-#include "geometry_msgs/Point.h"
-#include "std_msgs/Bool.h"
+#include "geometry_msgs/msg/point.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 struct Circle{
     Point center;

@@ -1,4 +1,4 @@
-#include "nav_node.hpp"
+#include "nav_node/nav_node.hpp"
 
 /*
 This file contains the implementation of the P* algorithm

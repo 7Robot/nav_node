@@ -1,7 +1,7 @@
 #ifndef PSTAR_HPP
 #define PSTAR_HPP
 
-#include "nav_node.hpp"
+#include "nav_node/nav_node.hpp"
 #define MAP_WIDTH 300
 #define MAP_HEIGHT 200
 
