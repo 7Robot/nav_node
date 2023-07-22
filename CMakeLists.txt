@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(cdf_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -23,7 +24,7 @@ install(TARGETS
 	nav_node
 	DESTINATION lib/$(PROJECT_NAME))
 
-ament_target_dependencies(nav_node rclcpp std_msgs geometry_msgs)
+ament_target_dependencies(nav_node rclcpp std_msgs geometry_msgs cdf_msgs)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

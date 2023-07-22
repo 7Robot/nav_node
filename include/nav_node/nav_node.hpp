@@ -1,16 +1,25 @@
 #ifndef NAV_NODE_HPP
 #define NAV_NODE_HPP
 
+#ifndef INT_MAX
+#define INT_MAX 65536
+#endif
+
 // Standard library
 #include <vector>
 #include "math.h"
 #include "fstream"
 #include "rclcpp/rclcpp.hpp"
+#include "ament_index_cpp/get_package_share_directory.hpp"
 
 // Nav_node specific
 #include "nav_node/pstar.hpp"
 
 // Messages
+#include "cdf_msgs/msg/trajectoire.hpp"
+#include "cdf_msgs/msg/pic_action.hpp"
+#include "cdf_msgs/msg/merged_data_bis.hpp"
+#include "cdf_msgs/msg/robot_data.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "std_msgs/msg/bool.hpp"
 
@@ -19,7 +28,7 @@ struct Circle{
     float radius;
 };
 
-class Nav_node
+class Nav_node : public rclcpp::Node
 {
     public:
         Nav_node();
@@ -31,13 +40,15 @@ class Nav_node
 
     private:
         // ROS
-        ros::NodeHandle n;
-        ros::Publisher pub_pic_action;
-        ros::Publisher result_pub;
-        ros::Subscriber sub_robot_data;
-        ros::Subscriber stop_sub;
-        ros::Subscriber goal_sub;
-        ros::Subscriber obstacles_sub;
+        
+        rclcpp::Publisher<cdf_msgs::msg::PicAction>::SharedPtr pub_pic_action;
+        rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr result_pub;
+        rclcpp::Subscription<cdf_msgs::msg::RobotData>::SharedPtr sub_robot_data;
+        rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr stop_sub;
+        rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr goal_sub;
+        rclcpp::Subscription<cdf_msgs::msg::MergedDataBis>::SharedPtr obstacles_sub;
+        
+        
 
         // Variables
         bool standby;
@@ -45,15 +56,15 @@ class Nav_node
         bool base_map[MAP_WIDTH][MAP_HEIGHT];
 
         // Callbacks
-        void robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg);
-        void stop_callback(const std_msgs::Bool::ConstPtr& msg);
-        void goal_callback(const geometry_msgs::Point::ConstPtr& msg);
-        void obstacles_callback(const cdf_msgs::MergedDataBis::ConstPtr& msg);
+        void robot_data_callback(const cdf_msgs::msg::RobotData::ConstPtr& msg);
+        void stop_callback(const std_msgs::msg::Bool::ConstPtr& msg);
+        void goal_callback(const geometry_msgs::msg::Point::ConstPtr& msg);
+        void obstacles_callback(const cdf_msgs::msg::MergedDataBis::ConstPtr& msg);
 
         // Functions
         void get_next_goal();
         void obstacle_processing(Circle obstacle[3]);
-        void obstacle_disjunction(cdf_msgs::MergedDataBis obstacles);
+        void obstacle_disjunction(cdf_msgs::msg::MergedDataBis obstacles);
         void or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_HEIGHT]);
         void make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]);
 
@@ -61,7 +72,7 @@ class Nav_node
         PStar nav_alg;
 
         // Robot data
-        cdf_msgs::RobotData robot_data;
+        cdf_msgs::msg::RobotData robot_data;
         Point robot_position;
         Point robot_goal;
         int robot_number;

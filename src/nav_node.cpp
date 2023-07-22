@@ -1,5 +1,7 @@
 #include "nav_node/nav_node.hpp"
 
+using std::placeholders::_1;
+
 float distance(Point a, Point b){
     // Compute the distance between two points
     return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
@@ -10,7 +12,7 @@ bool is_defined(Point a){
     return (a.x != -1 && a.y != -1);
 }
 
-Nav_node::Nav_node(){
+Nav_node::Nav_node() : Node("nav_node"){
     //Constructor    
     this->path = std::vector<Point>();
     
@@ -24,6 +26,7 @@ Nav_node::Nav_node(){
     std::string stop_topic;
     std::string position_goal_topic;
 
+    /*
     this->n.getParam("robot_id", this->robot_number);
     this->n.getParam("pic_action_topic", pic_action_topic);
     this->n.getParam("result_topic", result_topic);
@@ -33,14 +36,15 @@ Nav_node::Nav_node(){
     this->n.getParam("normal_radius", this->normal_radius);
     this->n.getParam("variation_obs", this->variation_obs);
     this->n.getParam("map_file", this->map_file);
+    */
 
     // Ros Pub and Sub
 
-    this->pub_pic_action = this->n.advertise<cdf_msgs::Pic_Action>(pic_action_topic, 1000);
-    this->result_pub = this->n.advertise<std_msgs::Bool>(result_topic, 1000);
-    this->goal_sub = this->n.subscribe(position_goal_topic, 1000, &Nav_node::goal_callback, this);
-    this->sub_robot_data = this->n.subscribe(robot_data_topic, 1000, &Nav_node::robot_data_callback, this);
-    this->stop_sub = this->n.subscribe(stop_topic, 1000, &Nav_node::stop_callback, this);
+    this->pub_pic_action = this->create_publisher<cdf_msgs::msg::PicAction>(pic_action_topic, 1000);
+    this->result_pub = this->create_publisher<std_msgs::msg::Bool>(result_topic, 1000);
+    this->goal_sub = this->create_subscription<geometry_msgs::msg::Point>(position_goal_topic, 1000, std::bind(&Nav_node::goal_callback, this, _1));
+    this->sub_robot_data = this->create_subscription<cdf_msgs::msg::RobotData>(robot_data_topic, 1000, std::bind(&Nav_node::robot_data_callback, this, _1));
+    this->stop_sub = this->create_subscription<std_msgs::msg::Bool>(stop_topic, 1000, std::bind(&Nav_node::stop_callback, this, _1));
 
     // Load the map
     this->load_map_file(this->map_file);
@@ -86,7 +90,7 @@ void Nav_node::make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT])
 
 }
 
-void Nav_node::obstacle_disjunction(cdf_msgs::MergedDataBis MergedData){
+void Nav_node::obstacle_disjunction(cdf_msgs::msg::MergedDataBis MergedData){
     /*
     This function will take the MergedDataBis message and extract the three obstacles
     */
@@ -183,14 +187,14 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
     
     if (rayon_courbure){
         // Set the curve to 1 mm
-        cdf_msgs::Pic_Action curve_msg;
+        cdf_msgs::msg::PicAction curve_msg;
         curve_msg.action_destination = "motor";
         curve_msg.action_msg = "setrayoncourbure 0.001";
-        this->pub_pic_action.publish(curve_msg);
+        this->pub_pic_action->publish(curve_msg);
     }
 
     // Set the goal
-    cdf_msgs::Pic_Action goal_msg;
+    cdf_msgs::msg::PicAction goal_msg;
     goal_msg.action_destination = "motor";
 
     // Format the goal
@@ -199,7 +203,7 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
         + " " + std::to_string(next_goal.y);
     
     goal_msg.action_msg = goal_msg_str;
-    this->pub_pic_action.publish(goal_msg);
+    this->pub_pic_action->publish(goal_msg);
 }
 
 void Nav_node::load_map_file(std::string map_file){
@@ -209,7 +213,7 @@ void Nav_node::load_map_file(std::string map_file){
     */
     
     // Get the real path of the file
-    std::string real_path = ros::package::getPath("nav_node") + "/maps/" + map_file;
+    std::string real_path = ament_index_cpp::get_package_share_directory("nav_node") + "/maps/" + map_file;
     std::ifstream map_file_stream(real_path);
     
     // Load the line in the map
@@ -246,7 +250,7 @@ void Nav_node::load_map_file(std::string map_file){
     this->nav_alg.set_map(map);
 }
 
-void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg){
+void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData::ConstPtr& msg){
     /*
     Get odometry information from the RobotData topic
     */
@@ -259,7 +263,7 @@ void Nav_node::robot_data_callback(const cdf_msgs::RobotData::ConstPtr& msg){
     this->robot_position.y = (this->robot_data.position).y;
 }
 
-void Nav_node::stop_callback(const std_msgs::Bool::ConstPtr& msg){
+void Nav_node::stop_callback(const std_msgs::msg::Bool::ConstPtr& msg){
     // Stop everything if a message is published to the standby topic
     this->standby = msg->data;
     if (msg->data){
@@ -270,7 +274,7 @@ void Nav_node::stop_callback(const std_msgs::Bool::ConstPtr& msg){
     }
 }
 
-void Nav_node::goal_callback(const geometry_msgs::Point::ConstPtr& msg){
+void Nav_node::goal_callback(const geometry_msgs::msg::Point::ConstPtr& msg){
     /*
     This function will be called when a goal is published to the goal topic
     */
@@ -337,16 +341,8 @@ void Nav_node::main_loop_func(){
 }
 
 int main(int argc, char * argv[]){
-    ros::init(argc, argv, "nav_node");
-
     Nav_node nav_node;
-    ros::Rate loop_rate(10);
-
-    while (ros::ok())
-    {
-        nav_node.main_loop_func();
-        ros::spinOnce();
-    }
+    rclcpp::init(argc, argv);
 }
 
 
