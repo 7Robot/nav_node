@@ -56,10 +56,10 @@ class Nav_node : public rclcpp::Node
         bool base_map[MAP_WIDTH][MAP_HEIGHT];
 
         // Callbacks
-        void robot_data_callback(const cdf_msgs::msg::RobotData::ConstPtr& msg);
-        void stop_callback(const std_msgs::msg::Bool::ConstPtr& msg);
-        void goal_callback(const geometry_msgs::msg::Point::ConstPtr& msg);
-        void obstacles_callback(const cdf_msgs::msg::MergedDataBis::ConstPtr& msg);
+        void robot_data_callback(const cdf_msgs::msg::RobotData msg);
+        void stop_callback(const std_msgs::msg::Bool msg);
+        void goal_callback(const geometry_msgs::msg::Point msg);
+        void obstacles_callback(const cdf_msgs::msg::MergedDataBis msg);
 
         // Functions
         void get_next_goal();

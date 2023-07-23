@@ -250,23 +250,23 @@ void Nav_node::load_map_file(std::string map_file){
     this->nav_alg.set_map(map);
 }
 
-void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData::ConstPtr& msg){
+void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData msg){
     /*
     Get odometry information from the RobotData topic
     */
     
     // Update the robot data
-    this->robot_data = *msg;
+    this->robot_data = msg;    
 
     // Update the robot position
     this->robot_position.x = (this->robot_data.position).x;
     this->robot_position.y = (this->robot_data.position).y;
 }
 
-void Nav_node::stop_callback(const std_msgs::msg::Bool::ConstPtr& msg){
+void Nav_node::stop_callback(const std_msgs::msg::Bool msg){
     // Stop everything if a message is published to the standby topic
-    this->standby = msg->data;
-    if (msg->data){
+    this->standby = msg.data;
+    if (msg.data){
         // Remove path and goal
         this->path = std::vector<Point>();
         this->robot_goal.x = -1;
@@ -274,14 +274,14 @@ void Nav_node::stop_callback(const std_msgs::msg::Bool::ConstPtr& msg){
     }
 }
 
-void Nav_node::goal_callback(const geometry_msgs::msg::Point::ConstPtr& msg){
+void Nav_node::goal_callback(const geometry_msgs::msg::Point msg){
     /*
     This function will be called when a goal is published to the goal topic
     */
     
     // Update the goal
-    this->robot_goal.x = static_cast<int>(msg->x*100);
-    this->robot_goal.y = static_cast<int>(msg->y*100);
+    this->robot_goal.x = static_cast<int>(msg.x*100);
+    this->robot_goal.y = static_cast<int>(msg.y*100);
 
     // Compute the path
     this->path = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
@@ -341,8 +341,8 @@ void Nav_node::main_loop_func(){
 }
 
 int main(int argc, char * argv[]){
-    Nav_node nav_node;
     rclcpp::init(argc, argv);
+    rclcpp::spin(std::make_shared<Nav_node>());
+    rclcpp::shutdown();
+    return 0;
 }
-
-
