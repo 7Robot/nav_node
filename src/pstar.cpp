@@ -68,11 +68,10 @@ int PStar::calculate_path(int startX, int startY, int endX, int endY, std::vecto
     bool still_running = true;
 
     this->map_cost[startX][startY] = 0;
-
     // Errno -2 Start in obstacle
-    if (startX < 0 || startY < 0 || startX > MAP_WIDTH || startY > MAP_HEIGHT || this->map[startX][startY] ){return -2;}
+    if (startX < 0 || startY < 0 || startX > MAP_WIDTH || startY > MAP_HEIGHT || this->map[startX][startY] == false){return -2;}
     // Errno -3 End in obstacle
-    if (endX < 0 || endY < 0 || endX > MAP_WIDTH || endY > MAP_HEIGHT || this->map[endX][endY]){return -3;}
+    if (endX < 0 || endY < 0 || endX > MAP_WIDTH || endY > MAP_HEIGHT || this->map[endX][endY] == false){return -3;}
 
 
     while (running){
@@ -129,7 +128,8 @@ int PStar::calculate_path(int startX, int startY, int endX, int endY, std::vecto
         path.push_back(current);
     }
     // Rewrite the path in the parameter
-    for (int i = path.size()-1; i >= 0; i--){
+    int length = path.size();
+    for (int i = 0; i < length ; i++){
         result_path.push_back(path[i]);
     }
 

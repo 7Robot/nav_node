@@ -49,7 +49,7 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->stop_sub = this->create_subscription<std_msgs::msg::Bool>(stop_topic, 1000, std::bind(&Nav_node::stop_callback, this, _1));
 
     // Load the map
-    this->load_map_file(this->map_file);
+    this->load_map_file(map_file);
 
     // Main loop
     this->timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&Nav_node::main_loop_func, this));
@@ -230,13 +230,20 @@ void Nav_node::load_map_file(std::string map_file){
     */
     
     // Get the real path of the file
-    std::string real_path = ament_index_cpp::get_package_share_directory("nav_node") + "/maps/" + map_file;
+    std::string real_path = ament_index_cpp::get_package_share_directory("nav_node") + "/../../../../src/nav_node/maps/" + map_file;
+    std::cout << real_path << std::endl;
+
     std::ifstream map_file_stream(real_path);
     
     // Load the line in the map
     std::string line;
     std::getline(map_file_stream, line);
     int length = line.length();
+    if (length != MAP_WIDTH * MAP_HEIGHT){
+        #ifndef WORLD_OF_SILENCE
+        RCLCPP_ERROR(this->get_logger(), "Map file %s is not valid, size : %d", map_file.c_str(), length);
+        #endif
+    }
     int x = 0;
     int y = 0;
 
@@ -256,6 +263,7 @@ void Nav_node::load_map_file(std::string map_file){
         else{
             map[x][y] = true;
         }
+        x++;
     }
 
     // Use accessors to set the map
