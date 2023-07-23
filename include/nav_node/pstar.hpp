@@ -15,7 +15,7 @@ class PStar{
         PStar();
         ~PStar();
 
-        std::vector<Point> calculate_path(int startX, int startY, int endX, int endY);
+        int calculate_path(int startX, int startY, int endX, int endY, std::vector<Point> &result_path);
         void set_map(bool map[MAP_WIDTH][MAP_HEIGHT]);
 
     private:

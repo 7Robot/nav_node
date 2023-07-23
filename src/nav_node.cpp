@@ -312,9 +312,22 @@ void Nav_node::goal_callback(const geometry_msgs::msg::Point msg){
     this->robot_goal.y = static_cast<int>(msg.y*100);
 
     // Compute the path
-    this->path = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
-    if (this->path.empty()){
+    
+    int result = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y, this->path);
+    if (result != 0){
         // If the path is empty, the goal is unreachable
+        
+        #ifndef WORLD_OF_SILENCE
+        if (result == -1){
+            RCLCPP_WARN(this->get_logger(), "Path from (%d, %d) to (%d, %d) is unreachable", this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
+        }
+        else if (result == -2){
+            RCLCPP_WARN(this->get_logger(), "Start (%d, %d) is in obstacle", this->robot_position.x, this->robot_position.y);
+        }
+        else if (result == -3){
+            RCLCPP_WARN(this->get_logger(), "End (%d, %d) is in obstacle", this->robot_goal.x, this->robot_goal.y);
+        }
+        #endif
         this->robot_goal.x = -1;
         this->robot_goal.y = -1;
         return;
@@ -363,10 +376,8 @@ void Nav_node::main_loop_func(){
         return;
     }
 
-    // If there is no path, compute one
-    if (this->path.empty() && is_defined(this->robot_goal)){
-        // Compute the path
-        this->path = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
+    // If the robot is close enough to the goal, get the next goal
+    if (distance(this->robot_position, this->next_goal) < this->goal_tolerance){
         this->get_next_goal();
         if (this->path.empty()){
             // We reached the goal

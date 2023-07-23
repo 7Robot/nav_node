@@ -52,7 +52,7 @@ bool PStar::get_cost(Point p){
     return old_cost != this->map_cost[p.x][p.y];
 }
 
-std::vector<Point> PStar::calculate_path(int startX, int startY, int endX, int endY){
+int PStar::calculate_path(int startX, int startY, int endX, int endY, std::vector<Point> &result_path){
     /*
     This function loop until the cost of all the nodes 
     can't change anymore.
@@ -68,6 +68,12 @@ std::vector<Point> PStar::calculate_path(int startX, int startY, int endX, int e
     bool still_running = true;
 
     this->map_cost[startX][startY] = 0;
+
+    // Errno -2 Start in obstacle
+    if (startX < 0 || startY < 0 || startX > MAP_WIDTH || startY > MAP_HEIGHT || this->map[startX][startY] ){return -2;}
+    // Errno -3 End in obstacle
+    if (endX < 0 || endY < 0 || endX > MAP_WIDTH || endY > MAP_HEIGHT || this->map[endX][endY]){return -3;}
+
 
     while (running){
         
@@ -100,8 +106,7 @@ std::vector<Point> PStar::calculate_path(int startX, int startY, int endX, int e
     current.x = endX;
     current.y = endY;
     if (this->map_cost[current.x][current.y] == INT_MAX){
-        //std::cout << "No path found" << std::endl;
-        return path;
+        return -1;
     }
     path.push_back(current);
     while (current.x != startX || current.y != startY){
@@ -123,7 +128,11 @@ std::vector<Point> PStar::calculate_path(int startX, int startY, int endX, int e
         current = best_point;
         path.push_back(current);
     }
-    //std::cout << "Path calculated" << std::endl;
-    return path;
+    // Rewrite the path in the parameter
+    for (int i = path.size()-1; i >= 0; i--){
+        result_path.push_back(path[i]);
+    }
+
+    return 0;
 }
 
