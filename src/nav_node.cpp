@@ -80,14 +80,10 @@ void Nav_node::make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT])
     /*
     Create a map with a circle obstacle
     */
-    float radius = obstacle.radius * 100;
-    Point center = obstacle.center;
-    center.x = center.x * 100;
-    center.y = center.y * 100;
 
     for(int x = 0; x < MAP_WIDTH; x++){
         for(int y = 0; y < MAP_HEIGHT; y++){
-            if (pow(x - center.x, 2) + pow(y - center.y, 2) < pow(radius, 2)){
+            if (pow(x - obstacle.center.x, 2) + pow(y - obstacle.center.y, 2) < pow(obstacle.radius, 2)){
                 map[x][y] = true;
             }
             else{
@@ -111,14 +107,14 @@ void Nav_node::obstacle_disjunction(cdf_msgs::msg::MergedDataBis MergedData){
         if (MergedData.robot_2[tmp - 1].position.x == 0 && MergedData.robot_2[tmp - 1].position.y == 0){
             // Robot 2 is not defined
             tmp = MergedData.ennemi_3.size();
-            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x;
-            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y;
+            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x * 100;
+            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y * 100;
         }
         else{
             // Robot 2 is defined
             tmp = MergedData.robot_2.size();
-            obstacle[0].center.x = MergedData.robot_2[tmp - 1].position.x;
-            obstacle[0].center.y = MergedData.robot_2[tmp - 1].position.y;
+            obstacle[0].center.x = MergedData.robot_2[tmp - 1].position.x * 100;
+            obstacle[0].center.y = MergedData.robot_2[tmp - 1].position.y * 100;
         }
 
     }
@@ -127,24 +123,24 @@ void Nav_node::obstacle_disjunction(cdf_msgs::msg::MergedDataBis MergedData){
         if (MergedData.robot_1[tmp - 1].position.x == 0 && MergedData.robot_1[tmp - 1].position.y == 0){
             // Robot 1 is not defined
             auto tmp = MergedData.ennemi_3.size();
-            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x;
-            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y;
+            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x * 100;
+            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y * 100;
         }
         else{
             // Robot 1 is defined
             auto tmp = MergedData.robot_1.size();
-            obstacle[0].center.x = MergedData.robot_1[tmp - 1].position.x;
-            obstacle[0].center.y = MergedData.robot_1[tmp - 1].position.y;
+            obstacle[0].center.x = MergedData.robot_1[tmp - 1].position.x * 100;
+            obstacle[0].center.y = MergedData.robot_1[tmp - 1].position.y * 100;
         }
     }
 
     auto tmp = MergedData.ennemi_1.size();
-    obstacle[1].center.x = MergedData.ennemi_1[tmp - 1].position.x;
-    obstacle[1].center.y = MergedData.ennemi_1[tmp - 1].position.y;
+    obstacle[1].center.x = MergedData.ennemi_1[tmp - 1].position.x * 100;
+    obstacle[1].center.y = MergedData.ennemi_1[tmp - 1].position.y * 100;
 
     tmp = MergedData.ennemi_2.size();
-    obstacle[2].center.x = MergedData.ennemi_2[tmp - 1].position.x;
-    obstacle[2].center.y = MergedData.ennemi_2[tmp - 1].position.y;
+    obstacle[2].center.x = MergedData.ennemi_2[tmp - 1].position.x * 100;
+    obstacle[2].center.y = MergedData.ennemi_2[tmp - 1].position.y * 100;
 
     #ifndef WORLD_OF_SILENCE
     RCLCPP_INFO(this->get_logger(), "Obstacle 1 : (%d, %d)", obstacle[0].center.x, obstacle[0].center.y);
@@ -217,8 +213,8 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
 
     // Format the goal
     std::string goal_msg_str = "moveavant "   
-        + std::to_string(next_goal.x) 
-        + " " + std::to_string(next_goal.y);
+        + std::to_string(next_goal.x/100) 
+        + " " + std::to_string(next_goal.y/100);
     
     goal_msg.action_msg = goal_msg_str;
     this->pub_pic_action->publish(goal_msg);
@@ -284,8 +280,8 @@ void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData msg){
     this->robot_data = msg;    
 
     // Update the robot position
-    this->robot_position.x = (this->robot_data.position).x;
-    this->robot_position.y = (this->robot_data.position).y;
+    this->robot_position.x = (this->robot_data.position).x * 100;
+    this->robot_position.y = (this->robot_data.position).y * 100;
 
     #ifndef WORLD_OF_SILENCE
     RCLCPP_INFO(this->get_logger(), "Robot position : (%d, %d)", this->robot_position.x, this->robot_position.y);
