@@ -44,7 +44,7 @@ bool PStar::get_cost(Point p){
             else{
                 cost = this->map_cost[p.x + dx][p.y + dy] + 14;
             }
-            if (cost < this->map_cost[p.x][p.y]){
+            if (cost < this->map_cost[p.x][p.y] && cost > 0){
                 this->map_cost[p.x][p.y] = cost;
             }
         }
