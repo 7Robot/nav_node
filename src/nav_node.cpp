@@ -20,11 +20,13 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->robot_goal.y = -1;
 
     // Get parameters
-    std::string pic_action_topic;
-    std::string result_topic;
-    std::string robot_data_topic;
-    std::string stop_topic;
-    std::string position_goal_topic;
+    std::string pic_action_topic = "/pic_action";
+    std::string result_topic = "/result";
+    std::string robot_data_topic = "/robot_data";
+    std::string stop_topic = "/stop";
+    std::string position_goal_topic = "/position_goal";
+    std::string map_file = "blank.txt";
+    this->goal_tolerance = 10;
 
     /*
     this->n.getParam("robot_id", this->robot_number);
