@@ -54,6 +54,9 @@ Nav_node::Nav_node() : Node("nav_node"){
     // Main loop
     this->timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&Nav_node::main_loop_func, this));
 
+    #ifndef WORlD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Nav_node initialized");
+    #endif
 }
 
 Nav_node::~Nav_node(){
@@ -143,6 +146,12 @@ void Nav_node::obstacle_disjunction(cdf_msgs::msg::MergedDataBis MergedData){
     obstacle[2].center.x = MergedData.ennemi_2[tmp - 1].position.x;
     obstacle[2].center.y = MergedData.ennemi_2[tmp - 1].position.y;
 
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Obstacle 1 : (%d, %d)", obstacle[0].center.x, obstacle[0].center.y);
+    RCLCPP_INFO(this->get_logger(), "Obstacle 2 : (%d, %d)", obstacle[1].center.x, obstacle[1].center.y);
+    RCLCPP_INFO(this->get_logger(), "Obstacle 3 : (%d, %d)", obstacle[2].center.x, obstacle[2].center.y);
+    #endif
+
     this->obstacle_processing(obstacle);
 }
 
@@ -169,6 +178,10 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
         return;
     }
     else {
+        #ifndef WORLD_OF_SILENCE
+        RCLCPP_INFO(this->get_logger(), "Obstacle variation detected");
+        #endif
+
         bool new_map[MAP_WIDTH][MAP_HEIGHT];
         for (int x = 0; x < MAP_WIDTH; x++){
             for (int y = 0; y < MAP_HEIGHT; y++){
@@ -209,6 +222,9 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
     
     goal_msg.action_msg = goal_msg_str;
     this->pub_pic_action->publish(goal_msg);
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Goal sent to PIC : %s", goal_msg_str.c_str());
+    #endif
 }
 
 void Nav_node::load_map_file(std::string map_file){
@@ -253,6 +269,10 @@ void Nav_node::load_map_file(std::string map_file){
         }
     }
     this->nav_alg.set_map(map);
+
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Map %s loaded", map_file.c_str());
+    #endif
 }
 
 void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData msg){
@@ -266,6 +286,10 @@ void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData msg){
     // Update the robot position
     this->robot_position.x = (this->robot_data.position).x;
     this->robot_position.y = (this->robot_data.position).y;
+
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Robot position : (%d, %d)", this->robot_position.x, this->robot_position.y);
+    #endif
 }
 
 void Nav_node::stop_callback(const std_msgs::msg::Bool msg){
@@ -277,6 +301,9 @@ void Nav_node::stop_callback(const std_msgs::msg::Bool msg){
         this->robot_goal.x = -1;
         this->robot_goal.y = -1;
     }
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Standby : %d", this->standby);
+    #endif
 }
 
 void Nav_node::goal_callback(const geometry_msgs::msg::Point msg){
@@ -298,9 +325,20 @@ void Nav_node::goal_callback(const geometry_msgs::msg::Point msg){
     }
     else{
         // The path is reachable so we can start the navigation
+        #ifndef WORLD_OF_SILENCE
+        RCLCPP_INFO(this->get_logger(), "Path from (%d, %d) to (%d, %d) is reachable :", this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
+        int tmp = this->path.size();
+        for (int i = 0; i < tmp; i++){
+            RCLCPP_INFO(this->get_logger(), "(%d, %d)", this->path[i].x, this->path[i].y);
+        }
+        #endif
         this->standby = false;
         this->get_next_goal();
     }
+
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "New goal : (%d, %d)", this->robot_goal.x, this->robot_goal.y);
+    #endif
 }
 
 void Nav_node::get_next_goal(){
@@ -311,6 +349,9 @@ void Nav_node::get_next_goal(){
     this->next_goal.x = temp.x;
     this->next_goal.y = temp.y;
 
+    #ifndef WORLD_OF_SILENCE
+    RCLCPP_INFO(this->get_logger(), "Next goal : (%d, %d)", this->next_goal.x, this->next_goal.y);
+    #endif
     // Publish the goal
     this->publish_pic_msg(this->next_goal, false);
 }
@@ -331,16 +372,13 @@ void Nav_node::main_loop_func(){
         // Compute the path
         this->path = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y);
         this->get_next_goal();
-    }
-    else{
-        // If the robot is close enough to the goal, get the next goal
-        if (distance(this->robot_position, this->next_goal) < this->goal_tolerance){
-            this->get_next_goal();
-            if (this->path.empty()){
-                // We reached the goal
-                this->robot_goal.x = -1;
-                this->robot_goal.y = -1;
-            }
+        if (this->path.empty()){
+            // We reached the goal
+            #ifndef WORLD_OF_SILENCE
+            RCLCPP_INFO(this->get_logger(), "Goal reached");
+            #endif
+            this->robot_goal.x = -1;
+            this->robot_goal.y = -1;
         }
     }
 }

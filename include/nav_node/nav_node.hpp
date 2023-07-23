@@ -5,6 +5,8 @@
 #define INT_MAX 65536
 #endif
 
+//#define WORLD_OF_SILENCE 1
+
 // Standard library
 #include <vector>
 #include "math.h"
