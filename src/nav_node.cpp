@@ -49,6 +49,9 @@ Nav_node::Nav_node() : Node("nav_node"){
     // Load the map
     this->load_map_file(this->map_file);
 
+    // Main loop
+    this->timer_ = this->create_wall_timer(std::chrono::milliseconds(100), std::bind(&Nav_node::main_loop_func, this));
+
 }
 
 Nav_node::~Nav_node(){
@@ -315,7 +318,7 @@ void Nav_node::main_loop_func(){
     This loop function is called every 100 ms, it
     execute the navigation algorithm
     */
-    
+
     if (this->standby){
         // If the robot is in standby, do nothing
         return;

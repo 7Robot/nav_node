@@ -85,6 +85,7 @@ class Nav_node : public rclcpp::Node
 
         // ROS Parameters
         float goal_tolerance;
+        rclcpp::TimerBase::SharedPtr timer_;
 };
 
 
