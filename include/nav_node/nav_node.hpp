@@ -54,7 +54,7 @@ class Nav_node : public rclcpp::Node
 
         // Variables
         bool standby;
-        std::vector<Point> path;
+        std::vector<Point> path = std::vector<Point>();
         bool base_map[MAP_WIDTH][MAP_HEIGHT];
 
         // Callbacks

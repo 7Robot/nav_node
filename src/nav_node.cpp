@@ -385,7 +385,7 @@ void Nav_node::main_loop_func(){
     }
 
     // If the robot is close enough to the goal, get the next goal
-    if (distance(this->robot_position, this->next_goal) < this->goal_tolerance){
+    if (!(this->path.empty()) && distance(this->robot_position, this->next_goal) < this->goal_tolerance){
         this->get_next_goal();
         if (this->path.empty()){
             // We reached the goal
