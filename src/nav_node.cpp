@@ -198,7 +198,7 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
     /*
     This function send position goal to the PIC
     */
-    
+
     if (rayon_courbure){
         // Set the curve to 1 mm
         cdf_msgs::msg::PicAction curve_msg;
@@ -212,9 +212,10 @@ void Nav_node::publish_pic_msg(Point next_goal, bool rayon_courbure){
     goal_msg.action_destination = "motor";
 
     // Format the goal
+
     std::string goal_msg_str = "moveavant "   
-        + std::to_string(next_goal.x/100) 
-        + " " + std::to_string(next_goal.y/100);
+        + std::to_string(next_goal.x/100.0) 
+        + " " + std::to_string(next_goal.y/100.0);
     
     goal_msg.action_msg = goal_msg_str;
     this->pub_pic_action->publish(goal_msg);
