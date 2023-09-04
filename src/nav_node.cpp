@@ -40,15 +40,15 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->declare_parameter("variation_obs", this->variation_obs);
     this->declare_parameter("map_file", map_file);    
 
-    this->n.getParam("robot_id", this->robot_number);
-    this->n.getParam("pic_action_topic", pic_action_topic);
-    this->n.getParam("result_topic", result_topic);
-    this->n.getParam("robot_data_topic", robot_data_topic);
-    this->n.getParam("position_goal_topic", position_goal_topic);
-    this->n.getParam("stop_topic", stop_topic);
-    this->n.getParam("normal_radius", this->normal_radius);
-    this->n.getParam("variation_obs", this->variation_obs);
-    this->n.getParam("map_file", this->map_file);
+    this->get_parameter("robot_id", this->robot_number).as_int();
+    this->get_parameter("pic_action_topic", pic_action_topic).as_string();
+    this->get_parameter("result_topic", result_topic).as_string();
+    this->get_parameter("robot_data_topic", robot_data_topic).as_string();
+    this->get_parameter("position_goal_topic", position_goal_topic).as_string();
+    this->get_parameter("stop_topic", stop_topic).as_string();
+    this->get_parameter("normal_radius", this->normal_radius).as_double();
+    this->get_parameter("variation_obs", this->variation_obs).as_double();
+    this->get_parameter("map_file", this->map_file).as_string();
     
 
     // Ros Pub and Sub
