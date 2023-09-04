@@ -23,12 +23,23 @@ Nav_node::Nav_node() : Node("nav_node"){
     std::string pic_action_topic = "/pic_action";
     std::string result_topic = "/result";
     std::string robot_data_topic = "/robot_data";
-    std::string stop_topic = "/stop";
     std::string position_goal_topic = "/position_goal";
+    std::string stop_topic = "/stop";
+    this->normal_radius = 0.15;
+    this->variation_obs = 0.10;
     std::string map_file = "blank.txt";
     this->goal_tolerance = 10;
 
-    /*
+    this->declare_parameter("robot_id", -1);
+    this->declare_parameter("pic_action_topic", pic_action_topic);
+    this->declare_parameter("result_topic", result_topic);
+    this->declare_parameter("robot_data_topic", robot_data_topic);
+    this->declare_parameter("position_goal_topic", position_goal_topic);
+    this->declare_parameter("stop_topic", stop_topic);
+    this->declare_parameter("normal_radius", this->normal_radius);
+    this->declare_parameter("variation_obs", this->variation_obs);
+    this->declare_parameter("map_file", map_file);    
+
     this->n.getParam("robot_id", this->robot_number);
     this->n.getParam("pic_action_topic", pic_action_topic);
     this->n.getParam("result_topic", result_topic);
@@ -38,7 +49,7 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->n.getParam("normal_radius", this->normal_radius);
     this->n.getParam("variation_obs", this->variation_obs);
     this->n.getParam("map_file", this->map_file);
-    */
+    
 
     // Ros Pub and Sub
 
