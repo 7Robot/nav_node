@@ -47,7 +47,7 @@ Ce noeud dispose des Subscribers suivants :
 | Nom | Type | Call Back |  Description |
 | --- | ---- | --------- | ------------ |
 | goal_sub | Point | goal_callback | Topic qui donne le point d'arrivée voulu. |
-| sub_robot_data | RobotData | robot_data_callback | 
+| sub_robot_data | RobotData | robot_data_callback | Topic qui donne les information d'odomérie (position) |
 | stop_sub | Bool | stop_callback | Topic demande l'arret de la naviguation de la nav node. |
 
 
