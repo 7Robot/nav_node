@@ -8,6 +8,15 @@ La recherche de Chemin se fait par l'algorithme **P\***  (Pepino \*), cette algo
 
 L'algorithme part d'un tableau en 2D, ce tableau sera mis à jour avec le meilleur chemin pour accéder à chacune des cases, on reparcourt le tableau tant que le tableau des distances d'accès varie.
 
+#### Errno
+
+Ci-dessous voici la liste des erreurs que peut renvoyer l'algorithme de recherche de chemin : 
+	- Errno 0  : Pas d'erreur
+	- Errno -1 : Pas de chemin valide trouvé
+	- Errno -2 : Recherche d'un chemin où l'on commence dans un obstacle
+	- Errno -3 : Recherche de chemin où l'on fini dans un obstacle
+
+
 ### Mise à jour du chemin
 
 Le chemin est mis à jour (c'est à dire recalculé) si et seulement si :

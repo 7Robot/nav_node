@@ -18,9 +18,9 @@ Nav_node::Nav_node() : Node("nav_node"){
     
     this->robot_goal.x = -1;
     this->robot_goal.y = -1;
+    this->goal_tolerance = 0.1;
 
     // Get parameters
-    this->goal_tolerance = 0.1;
 
     this->declare_parameter("robot_id", 0);
     this->declare_parameter("pic_action_topic", "/pic_action");
@@ -70,6 +70,8 @@ void Nav_node::or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_
     /*
     This function will do a logical OR between two maps and assign it
     to the first one
+
+	It allows user to add layer containing object like in Gimp
     */
     
     for(int x = 0; x < MAP_WIDTH; x++){
@@ -159,7 +161,7 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
     Given the three obstacles, this function will place circle on the map
     */
 
-    // Obstacle variation ?
+    // Try to see if obstacles are different
     bool variation = false;
     for (int i = 0; i < 3; i++){
         variation = true;
@@ -172,6 +174,7 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
             }
         }
     }
+
     if (!variation){
         // If there is no variation, do nothing
         return;
@@ -180,7 +183,8 @@ void Nav_node::obstacle_processing(Circle obstacle[3]){
         #ifndef WORLD_OF_SILENCE
         RCLCPP_INFO(this->get_logger(), "Obstacle variation detected");
         #endif
-
+		
+		// Update the map with new obstacles
         bool new_map[MAP_WIDTH][MAP_HEIGHT];
         for (int x = 0; x < MAP_WIDTH; x++){
             for (int y = 0; y < MAP_HEIGHT; y++){
@@ -327,7 +331,7 @@ void Nav_node::goal_callback(const geometry_msgs::msg::Point msg){
     
     int result = this->nav_alg.calculate_path(this->robot_position.x, this->robot_position.y, this->robot_goal.x, this->robot_goal.y, this->path);
     if (result != 0){
-        // If the path is empty, the goal is unreachable
+        // If the result is different from 0 there is an error, please see errno description in README.md
         
         #ifndef WORLD_OF_SILENCE
         if (result == -1){
