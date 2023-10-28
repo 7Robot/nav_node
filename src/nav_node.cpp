@@ -23,21 +23,16 @@ Nav_node::Nav_node() : Node("nav_node"){
     // Get parameters
 
     this->declare_parameter("robot_id", 0);
-    this->declare_parameter("pic_action_topic", "/pic_action");
-    this->declare_parameter("result_topic", "/result");
-    this->declare_parameter("robot_data_topic", "/robot_data");
-    this->declare_parameter("position_goal_topic", "/position_goal");
-    this->declare_parameter("stop_topic", "/stop");
     this->declare_parameter("normal_radius", 0.15);
     this->declare_parameter("variation_obs", 0.10);
     this->declare_parameter("map_file", "blank.txt");    
 
     this->robot_number = this->get_parameter("robot_id").as_int();
-    std::string pic_action_topic = this->get_parameter("pic_action_topic").as_string();
-    std::string result_topic = this->get_parameter("result_topic").as_string();
-    std::string robot_data_topic = this->get_parameter("robot_data_topic").as_string();
-    std::string position_goal_topic = this->get_parameter("position_goal_topic").as_string();
-    std::string stop_topic = this->get_parameter("stop_topic").as_string();
+    std::string pic_action_topic = "pic_action";
+    std::string result_topic = "nav_result";
+    std::string robot_data_topic = "robot_data";
+    std::string position_goal_topic = "nav_goal";
+    std::string stop_topic = "nav_stop";
     this->normal_radius = this->get_parameter("normal_radius").as_double();
     this->variation_obs = this->get_parameter("variation_obs").as_double();
     this->map_file = this->get_parameter("map_file").as_string();
