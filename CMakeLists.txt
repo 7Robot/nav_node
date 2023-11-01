@@ -22,7 +22,7 @@ include_directories(
 add_executable(nav_node src/nav_node.cpp src/pstar.cpp)
 install(TARGETS
 	nav_node
-	DESTINATION lib/$(PROJECT_NAME))
+	DESTINATION lib/${PROJECT_NAME})
 
 ament_target_dependencies(nav_node rclcpp std_msgs geometry_msgs cdf_msgs)
 
