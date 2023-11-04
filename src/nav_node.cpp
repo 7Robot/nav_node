@@ -12,6 +12,27 @@ bool is_defined(Point a){
     return (a.x != -1 && a.y != -1);
 }
 
+cdf_msgs::msg::CircleObstacle to_absolute_coordinate(cdf_msgs::msg::CircleObstacle circle, Point robot_position){
+    /* Convert point from the robot coordinate system to 
+    the playground coordinate system.
+
+    circle : a circle_obstacle object containing the object coordinate to convert
+    robot_position : Position of the robot in the playground coordinate system
+    rotation : angle between the x axis of the playground and the front of the robot
+    */
+    cdf_msgs::msg::CircleObstacle result;
+
+    float sin_p, cos_p;
+    sin_p = sin(robot_position.theta);
+    cos_p = cos(robot_position.theta);
+
+    result.center.x = robot_position.x +  100 * (cos_p * circle.center.x - sin_p * circle.center.y);
+    result.center.y = robot_position.y + 100 * (sin_p * circle.center.x - cos_p * circle.center.y);
+    result.radius = circle.radius;
+
+    return result;
+}
+
 Nav_node::Nav_node() : Node("nav_node"){
     //Constructor    
     this->path = std::vector<Point>();
@@ -45,6 +66,7 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->goal_sub = this->create_subscription<geometry_msgs::msg::Point>(position_goal_topic, 1000, std::bind(&Nav_node::goal_callback, this, _1));
     this->sub_robot_data = this->create_subscription<cdf_msgs::msg::RobotData>(robot_data_topic, 1000, std::bind(&Nav_node::robot_data_callback, this, _1));
     this->stop_sub = this->create_subscription<std_msgs::msg::Bool>(stop_topic, 1000, std::bind(&Nav_node::stop_callback, this, _1));
+    this->obstacles_sub = this->create_subscription<cdf_msgs::msg::Obstacles>(stop_topic, 1000, std::bind(&Nav_node::obstacles_callback, this, _1));
 
     // Load the map
     this->load_map_file(map_file);
@@ -76,7 +98,7 @@ void Nav_node::or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_
     }
 }
 
-void Nav_node::make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]){
+void Nav_node::make_circle_map(cdf_msgs::msg::CircleObstacle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]){
     /*
     Create a map with a circle obstacle
     */
@@ -94,73 +116,19 @@ void Nav_node::make_circle_map(Circle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT])
 
 }
 
-void Nav_node::obstacle_disjunction(cdf_msgs::msg::MergedDataBis MergedData){
-    /*
-    This function will take the MergedDataBis message and extract the three obstacles
-    */
-
-    Circle obstacle[3];
-
-    if (this->robot_number == 1){
-        auto tmp = MergedData.robot_2.size();
-
-        if (MergedData.robot_2[tmp - 1].position.x == 0 && MergedData.robot_2[tmp - 1].position.y == 0){
-            // Robot 2 is not defined
-            tmp = MergedData.ennemi_3.size();
-            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x * 100;
-            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y * 100;
-        }
-        else{
-            // Robot 2 is defined
-            tmp = MergedData.robot_2.size();
-            obstacle[0].center.x = MergedData.robot_2[tmp - 1].position.x * 100;
-            obstacle[0].center.y = MergedData.robot_2[tmp - 1].position.y * 100;
-        }
-
-    }
-    else{
-        auto tmp = MergedData.robot_1.size();
-        if (MergedData.robot_1[tmp - 1].position.x == 0 && MergedData.robot_1[tmp - 1].position.y == 0){
-            // Robot 1 is not defined
-            auto tmp = MergedData.ennemi_3.size();
-            obstacle[0].center.x = MergedData.ennemi_3[tmp - 1].position.x * 100;
-            obstacle[0].center.y = MergedData.ennemi_3[tmp - 1].position.y * 100;
-        }
-        else{
-            // Robot 1 is defined
-            auto tmp = MergedData.robot_1.size();
-            obstacle[0].center.x = MergedData.robot_1[tmp - 1].position.x * 100;
-            obstacle[0].center.y = MergedData.robot_1[tmp - 1].position.y * 100;
-        }
-    }
-
-    auto tmp = MergedData.ennemi_1.size();
-    obstacle[1].center.x = MergedData.ennemi_1[tmp - 1].position.x * 100;
-    obstacle[1].center.y = MergedData.ennemi_1[tmp - 1].position.y * 100;
-
-    tmp = MergedData.ennemi_2.size();
-    obstacle[2].center.x = MergedData.ennemi_2[tmp - 1].position.x * 100;
-    obstacle[2].center.y = MergedData.ennemi_2[tmp - 1].position.y * 100;
-
-    #ifndef WORLD_OF_SILENCE
-    RCLCPP_INFO(this->get_logger(), "Obstacle 1 : (%d, %d)", obstacle[0].center.x, obstacle[0].center.y);
-    RCLCPP_INFO(this->get_logger(), "Obstacle 2 : (%d, %d)", obstacle[1].center.x, obstacle[1].center.y);
-    RCLCPP_INFO(this->get_logger(), "Obstacle 3 : (%d, %d)", obstacle[2].center.x, obstacle[2].center.y);
-    #endif
-
-    this->obstacle_processing(obstacle);
-}
-
-void Nav_node::obstacle_processing(Circle obstacle[3]){
+void Nav_node::obstacle_processing(std::vector<cdf_msgs::msg::CircleObstacle> obstacle){
     /*
     Given the three obstacles, this function will place circle on the map
     */
 
     // Try to see if obstacles are different
     bool variation = false;
-    for (int i = 0; i < 3; i++){
+    
+    int i_len = obstacle.size();
+    int j_len = this->obstacles.size();
+    for (int i = 0; i < i_len; i++){
         variation = true;
-        for (int j = 0; j < 3; j++){
+        for (int j = 0; j < j_len; j++){
             if (abs(obstacle[i].radius - this->obstacles[j].radius) > this->variation_obs\
                 && abs(obstacle[i].center.x - this->obstacles[j].center.x) > this->variation_obs\
                 && abs(obstacle[i].center.y - this->obstacles[j].center.y) > this->variation_obs){
@@ -282,6 +250,31 @@ void Nav_node::load_map_file(std::string map_file){
     #endif
 }
 
+void Nav_node::obstacles_callback(const cdf_msgs::msg::Obstacles msg){
+    /*
+    This function gather the msg from the cluster detector and process all the 
+    obstacles to add them to the map.
+    */
+    std::vector<cdf_msgs::msg::CircleObstacle> obstacle;
+    cdf_msgs::msg::CircleObstacle tmp_circle;
+    
+    int range_msg = msg.circles.size();
+    for (int i = 0; i < range_msg; i++){
+        tmp_circle = to_absolute_coordinate(msg.circles[i], this->robot_position);
+
+        // If the obstacle is in the playground we can add it
+        if (tmp_circle.center.x > 0 && 
+        tmp_circle.center.x < 300 &&    
+        tmp_circle.center.y > 0 &&    
+        tmp_circle.center.y < 200){
+            obstacle.push_back(tmp_circle);
+        }   
+    }
+
+    this->obstacle_processing(obstacle);
+}
+
+
 void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData msg){
     /*
     Get odometry information from the RobotData topic
@@ -293,6 +286,7 @@ void Nav_node::robot_data_callback(const cdf_msgs::msg::RobotData msg){
     // Update the robot position
     this->robot_position.x = (this->robot_data.position).x * 100;
     this->robot_position.y = (this->robot_data.position).y * 100;
+    this->robot_position.theta = (this->robot_data.position).z;
 
     #ifndef WORLD_OF_SILENCE
     RCLCPP_INFO(this->get_logger(), "Robot position : (%d, %d)", this->robot_position.x, this->robot_position.y);

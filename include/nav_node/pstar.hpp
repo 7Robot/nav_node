@@ -8,6 +8,7 @@
 struct Point{
     int x;
     int y;
+    float theta;
 };
 
 class PStar{
