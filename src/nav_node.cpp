@@ -12,27 +12,6 @@ bool is_defined(Point a){
     return (a.x != -1 && a.y != -1);
 }
 
-cdf_msgs::msg::CircleObstacle to_absolute_coordinate(cdf_msgs::msg::CircleObstacle circle, Point robot_position){
-    /* Convert point from the robot coordinate system to 
-    the playground coordinate system.
-
-    circle : a circle_obstacle object containing the object coordinate to convert
-    robot_position : Position of the robot in the playground coordinate system
-    rotation : angle between the x axis of the playground and the front of the robot
-    */
-    cdf_msgs::msg::CircleObstacle result;
-
-    float sin_p, cos_p;
-    sin_p = sin(robot_position.theta);
-    cos_p = cos(robot_position.theta);
-
-    result.center.x = robot_position.x +  100 * (cos_p * circle.center.x - sin_p * circle.center.y);
-    result.center.y = robot_position.y + 100 * (sin_p * circle.center.x - cos_p * circle.center.y);
-    result.radius = circle.radius;
-
-    return result;
-}
-
 Nav_node::Nav_node() : Node("nav_node"){
     //Constructor    
     this->path = std::vector<Point>();
@@ -97,6 +76,28 @@ void Nav_node::or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_
         }
     }
 }
+
+cdf_msgs::msg::CircleObstacle Nav_node::to_absolute_coordinate(cdf_msgs::msg::CircleObstacle circle){
+    /* Convert point from the robot coordinate system to 
+    the playground coordinate system.
+
+    circle : a circle_obstacle object containing the object coordinate to convert
+    robot_position : Position of the robot in the playground coordinate system
+    rotation : angle between the x axis of the playground and the front of the robot
+    */
+    cdf_msgs::msg::CircleObstacle result;
+
+    float sin_p, cos_p;
+    sin_p = sin(this->robot_position.theta);
+    cos_p = cos(this->robot_position.theta);
+
+    result.center.x = this->robot_position.x +  100 * (cos_p * circle.center.x - sin_p * circle.center.y);
+    result.center.y = this->robot_position.y + 100 * (sin_p * circle.center.x - cos_p * circle.center.y);
+    result.radius = circle.radius;
+
+    return result;
+}
+
 
 void Nav_node::make_circle_map(cdf_msgs::msg::CircleObstacle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]){
     /*
@@ -260,7 +261,7 @@ void Nav_node::obstacles_callback(const cdf_msgs::msg::Obstacles msg){
     
     int range_msg = msg.circles.size();
     for (int i = 0; i < range_msg; i++){
-        tmp_circle = to_absolute_coordinate(msg.circles[i], this->robot_position);
+        tmp_circle = this->to_absolute_coordinate(msg.circles[i]);
 
         // If the obstacle is in the playground we can add it
         if (tmp_circle.center.x > 0 && 

@@ -64,6 +64,7 @@ class Nav_node : public rclcpp::Node
         void obstacle_processing(std::vector<cdf_msgs::msg::CircleObstacle> obstacle);
         void or_map(bool map[MAP_WIDTH][MAP_HEIGHT], bool map2[MAP_WIDTH][MAP_HEIGHT]);
         void make_circle_map(cdf_msgs::msg::CircleObstacle obstacle, bool map[MAP_WIDTH][MAP_HEIGHT]);
+        cdf_msgs::msg::CircleObstacle to_absolute_coordinate(cdf_msgs::msg::CircleObstacle circle);
 
         // Navigation algorithm objects
         PStar nav_alg;
