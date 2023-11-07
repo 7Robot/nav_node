@@ -18,7 +18,7 @@ Nav_node::Nav_node() : Node("nav_node"){
     
     this->robot_goal.x = -1;
     this->robot_goal.y = -1;
-    this->goal_tolerance = 0.1;
+    this->goal_tolerance = 10;
 
     // Get parameters
 
