@@ -2,8 +2,6 @@
 #define PSTAR_HPP
 
 #include "nav_node/nav_node.hpp"
-#define MAP_WIDTH 300
-#define MAP_HEIGHT 200
 
 struct Point{
     int x;

@@ -5,6 +5,9 @@
 #define INT_MAX 2147483647
 #endif
 
+#define MAP_WIDTH 200
+#define MAP_HEIGHT 300
+
 //#define WORLD_OF_SILENCE 1
 
 // Standard library
