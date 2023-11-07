@@ -33,6 +33,7 @@ Nav_node::Nav_node() : Node("nav_node"){
     std::string robot_data_topic = "robot_data";
     std::string position_goal_topic = "nav_goal";
     std::string stop_topic = "nav_stop";
+    std::string obstacle_topic = "raw_obstacles";
     this->normal_radius = this->get_parameter("normal_radius").as_double();
     this->variation_obs = this->get_parameter("variation_obs").as_double();
     this->map_file = this->get_parameter("map_file").as_string();
@@ -45,7 +46,7 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->goal_sub = this->create_subscription<geometry_msgs::msg::Point>(position_goal_topic, 1000, std::bind(&Nav_node::goal_callback, this, _1));
     this->sub_robot_data = this->create_subscription<cdf_msgs::msg::RobotData>(robot_data_topic, 1000, std::bind(&Nav_node::robot_data_callback, this, _1));
     this->stop_sub = this->create_subscription<std_msgs::msg::Bool>(stop_topic, 1000, std::bind(&Nav_node::stop_callback, this, _1));
-    this->obstacles_sub = this->create_subscription<cdf_msgs::msg::Obstacles>(stop_topic, 1000, std::bind(&Nav_node::obstacles_callback, this, _1));
+    this->obstacles_sub = this->create_subscription<cdf_msgs::msg::Obstacles>(obstacle_topic, 1000, std::bind(&Nav_node::obstacles_callback, this, _1));
 
     // Load the map
     this->load_map_file(map_file);
@@ -123,20 +124,21 @@ void Nav_node::obstacle_processing(std::vector<cdf_msgs::msg::CircleObstacle> ob
     */
 
     // Try to see if obstacles are different
-    bool variation = false;
+    bool variation = true;
     
     int i_len = obstacle.size();
     int j_len = this->obstacles.size();
+    if (i_len == j_len){
     for (int i = 0; i < i_len; i++){
         variation = true;
         for (int j = 0; j < j_len; j++){
-            if (abs(obstacle[i].radius - this->obstacles[j].radius) > this->variation_obs\
-                && abs(obstacle[i].center.x - this->obstacles[j].center.x) > this->variation_obs\
+            if (abs(obstacle[i].center.x - this->obstacles[j].center.x) > this->variation_obs\
                 && abs(obstacle[i].center.y - this->obstacles[j].center.y) > this->variation_obs){
                 variation = false;
                 break;
             }
         }
+    }
     }
 
     if (!variation){
@@ -157,9 +159,11 @@ void Nav_node::obstacle_processing(std::vector<cdf_msgs::msg::CircleObstacle> ob
         }
         bool temp_map[MAP_WIDTH][MAP_HEIGHT];
         // If there is a variation, update the obstacles
-        for (int i = 0; i < 3; i++){
-            this->obstacles[i] = obstacle[i];
-            this->make_circle_map(obstacle[i], temp_map);
+        this->obstacles.clear();
+        for (int i = 0; i < i_len; i++){
+            RCLCPP_INFO(this->get_logger(), "Obstacle : (%f,%f)", obstacle.at(i).center.x, obstacle.at(i).center.y);
+            this->obstacles.push_back(obstacle.at(i));
+            this->make_circle_map(obstacle.at(i), temp_map);
             this->or_map(new_map, temp_map);            
         }
     }
@@ -265,9 +269,9 @@ void Nav_node::obstacles_callback(const cdf_msgs::msg::Obstacles msg){
 
         // If the obstacle is in the playground we can add it
         if (tmp_circle.center.x > 0 && 
-        tmp_circle.center.x < 300 &&    
+        tmp_circle.center.x < MAP_WIDTH &&    
         tmp_circle.center.y > 0 &&    
-        tmp_circle.center.y < 200){
+        tmp_circle.center.y < MAP_HEIGHT){
             obstacle.push_back(tmp_circle);
         }   
     }
