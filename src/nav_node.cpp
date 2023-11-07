@@ -28,9 +28,9 @@ Nav_node::Nav_node() : Node("nav_node"){
     this->declare_parameter("map_file", "blank.txt");    
 
     this->robot_number = this->get_parameter("robot_id").as_int();
-    std::string pic_action_topic = "pic_action";
+    std::string pic_action_topic = "action";
     std::string result_topic = "nav_result";
-    std::string robot_data_topic = "robot_data";
+    std::string robot_data_topic = "Odom";
     std::string position_goal_topic = "nav_goal";
     std::string stop_topic = "nav_stop";
     std::string obstacle_topic = "raw_obstacles";
